@@ -4664,10 +4664,6 @@ spawn(function()
 	end
 end)
 local S, L, d = game:GetService("Players"), game:GetService("ReplicatedStorage"), game:GetService("VirtualInputManager")
-
--- Portal helpers
--- The old implementation only worked when the player owned the Portal Fruit.
--- Keep it available as a fallback, but do not require the fruit for the setting itself.
 local function _()
 	local o = t.Data:FindFirstChild("DevilFruit")
 	if not o or o.Value ~= "Portal-Portal" then
@@ -5315,74 +5311,21 @@ function toTarget(P, e)
 			return
 		end
 		if Settings["Use Portal Teleport"] then
-			-- Use the real in-game portal system when it is available.
-			-- No Portal Fruit is required for this path. If no physical portal can
-			-- be resolved, leave the normal entrance/tween logic below in control.
-			local function UsePhysicalPortal(targetPosition)
-				local character = t.Character
-				local root = character and character:FindFirstChild("HumanoidRootPart")
-				if not root or not targetPosition then
-					return false
-				end
-
-				local map = workspace:FindFirstChild("Map")
-				if not map then
-					return false
-				end
-
-				local best, bestDistance
-				for _, obj in ipairs(map:GetDescendants()) do
-					local n = string.lower(obj.Name)
-					if n:find("portal", 1, true) or n:find("teleport", 1, true) then
-						local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
-						if part then
-							local dist = (part.Position - targetPosition).Magnitude
-							if dist <= 350 and (not bestDistance or dist < bestDistance) then
-								best, bestDistance = obj, dist
-							end
+			local d = t.Character:FindFirstChild("Portal-Portal") or (t.Backpack:FindFirstChild("Portal-Portal"))
+			if d and d.Level.Value > 200 and (_()) then
+				for d, _ in pairs(l[game.Workspace:GetAttribute("MAP")] or {}) do
+					if (P.Position - _).Magnitude <= 3000 and Y >= 3000 then
+						getgenv().noclip = true
+						if o(d) then
+							local l = tick() + 5
+							repeat
+								task.wait(0.2)
+							until t.Character and (t.Character.HumanoidRootPart.Position - _).Magnitude < 500
+								or tick() > l
+							return
 						end
 					end
 				end
-
-				if not best then
-					return false
-				end
-
-				local part = best:IsA("BasePart") and best or best:FindFirstChildWhichIsA("BasePart", true)
-				if not part then
-					return false
-				end
-
-				getgenv().noclip = true
-				local old = root.CFrame
-				local ok = pcall(function()
-					root.CFrame = part.CFrame + Vector3.new(0, 3, 0)
-				end)
-				if not ok then
-					root.CFrame = old
-					return false
-				end
-
-				local prompt = best:FindFirstChildWhichIsA("ProximityPrompt", true)
-				if prompt then
-					pcall(function()
-						if fireproximityprompt then
-							fireproximityprompt(prompt)
-						end
-					end)
-				end
-				return true
-			end
-
-			local target
-			for name, pos in pairs(l[workspace:GetAttribute("MAP")] or {}) do
-				if (P.Position - pos).Magnitude <= 3000 and Y >= 3000 then
-					target = {name = name, position = pos}
-					break
-				end
-			end
-			if target and UsePhysicalPortal(target.position) then
-				return
 			end
 		end
 		local l, d, _
@@ -5496,7 +5439,7 @@ function toTarget(P, e)
 	Z = if ReadyToDodge
 		then (CFrame.new(0, 200, 0))
 		else if G then (CFrame.new(0, Settings["Distance Teleport Y"] or 800, 0)) else Z
-	Y, e = math.clamp(tonumber(Settings["Speed Tween "]) or 220, 0, 220), P * Z
+	Y, e = math.min(tonumber(Settings["Speed Tween "]) or 220, 220), P * Z
 	if (e.Position - H.Position).Magnitude < 3 and not ReadyToDodge and not G then
 		TweenManager.CancelTweenOnly()
 		H.CFrame = e
@@ -6499,12 +6442,8 @@ SettingFarmMainSection.CreateToggle(
 		SaveSettings("Reset Teleport", I)
 	end
 )
-SaveSettings("Speed Tween ", 220)
 SettingFarmMainSection.CreateLabel({
-	Title = "Speed Tween: 220",
-})
-SettingFarmMainSection.CreateLabel({
-	Title = "Maximum speed 220 recommended",
+	Title = "Recommended: 220 - Maximum Speed",
 })
 SettingSkillMain =
 	Main.CreatePage({ Page_Name = "Hold and Select Skill", Page_Title = "Setting Hold and Select Skill" })
@@ -6604,8 +6543,7 @@ SettingAutoFarmSection.CreateToggle(
 		SaveSettings("Auto Quest [Katakuri/Bone/Tyrant]", o)
 	end
 )
-local o = SettingAutoFarmSection.CreateLabel({ Title = "Accepts automated missions according to Method Farm." })
-SettingAutoFarmSection.CreateToggle(
+local o = SettingAutoFarmSection.CreateToggle(
 	{ Title = "Start Farm", Desc = nil, Default = Settings["Start Farm"] or false },
 	function(V)
 		SaveSettings("Start Farm", V)
@@ -7276,32 +7214,6 @@ function SpecialHop(C)
 		end
 	end
 end
-
--- Histórico local dos pontos de spawn usados pelo FarmMethod.
--- Mantém o controle disponível para o fluxo Start Farm e evita erro quando nenhum mob está carregado.
-local N = {}
-
--- Retorna o alvo real da missão especial ativa. O GuideModule pode não estar
--- atualizado no mesmo instante em que a interface da missão aparece, então
--- usamos também os dados da própria quest como fallback.
-local function GetActiveFarmQuestMob(QuestName, QuestId)
-	local ActiveMob = GetNameDoubleQuest()
-	if type(ActiveMob) == "string" and ActiveMob ~= "" then
-		return ActiveMob
-	end
-
-	local ok, Task = pcall(function()
-		return H[QuestName] and H[QuestName][QuestId] and H[QuestName][QuestId].Task
-	end)
-	if ok and type(Task) == "table" then
-		for MobName in pairs(Task) do
-			if type(MobName) == "string" and MobName ~= "" then
-				return MobName
-			end
-		end
-	end
-end
-
 function FarmMethod()
 	local f, V, H = Settings["Select Method Farm"]
 	local C, J = 9999, 2
@@ -7325,29 +7237,16 @@ function FarmMethod()
 		end
 	end
 	f = V or (GetNameDoubleQuest()) or ""
-	local QuestGui = t.PlayerGui.Main:FindFirstChild("Quest")
-	local QuestVisible = QuestGui and QuestGui.Visible
-	if
-		Settings["Auto Quest [Katakuri/Bone/Tyrant]"]
-		and t.Data.Level.Value >= C
-		and not QuestVisible
-	then
-		QuestBoneAndkatakuri(H, J)
-		return
-	elseif not QuestVisible and typeof(f) == "string" then
+	if not t.PlayerGui.Main:FindFirstChild("Quest").Visible and typeof(f) == "string" then
 		TakeQuestLevel()
 	else
-		-- Quando a missão já foi aceita, usa o alvo exato da quest antes da lista
-		-- de mobs do método. Isso evita permanecer parado no NPC após aceitar.
-		local ActiveQuestMob = GetActiveFarmQuestMob(H, J)
-		if QuestVisible and typeof(ActiveQuestMob) == "string" and ActiveQuestMob ~= "" then
-			if typeof(V) == "table" then
-				if table.find(V, ActiveQuestMob) then
-					f = ActiveQuestMob
-				end
-			elseif V == ActiveQuestMob then
-				f = ActiveQuestMob
-			end
+		if
+			Settings["Auto Quest [Katakuri/Bone/Tyrant]"]
+			and t.Data.Level.Value >= C
+			and not t.PlayerGui.Main:FindFirstChild("Quest").Visible
+		then
+			QuestBoneAndkatakuri(H, J)
+			return
 		end
 		if not Settings["Farm Material"] and Settings["Select Method Farm"] == "Farm Tyrant of the Skies" then
 			if CheckNameBoss("Tyrant of the Skies") then
@@ -11096,7 +10995,11 @@ local function b()
 	return false
 end
 function RandomFruit()
-	b()
+	local ok, result = pcall(b)
+	if not ok then
+		return false
+	end
+	return result == true
 end
 function DetectCountDF()
 	local b = getbackpack()
@@ -11115,32 +11018,24 @@ function DetectCountDF()
 end
 local b = require(game:GetService("ReplicatedStorage").FruitInfo)
 function StoreFruit(E)
-	if not E or not E.GetChildren then
-		return
-	end
-	for _, y in ipairs(E:GetChildren()) do
-		if y:IsA("Tool") and string.find(y.Name, "Fruit", 1, true) and not y:FindFirstChild("Ignored") then
-			local cleanName = string.gsub(y.Name, " Fruit", "")
-			local fruitName = y:GetAttribute("OriginalName") or (cleanName .. "-" .. cleanName)
-			local stored = false
-			pcall(function()
-				local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
-				local comm = remotes and remotes:FindFirstChild("CommF_")
-				if comm then
-					comm:InvokeServer("StoreFruit", fruitName, y)
-					stored = true
-				end
+	for l, y in pairs(E:GetChildren()) do
+		if y:IsA("Tool") and (string.find(y.Name, "Fruit")) and not y:FindFirstChild("Ignored") then
+			l = string.gsub(y.Name, " Fruit", "")
+			local E
+			E = y:GetAttribute("OriginalName") or l .. "-" .. l
+			local ok = pcall(function()
+				game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", E, y)
 			end)
-			if not stored then
+			if not ok then
 				continue
 			end
-			local ignored = Instance.new("IntValue")
-			ignored.Name = "Ignored"
-			ignored.Parent = y
+			local l = Instance.new("IntValue")
+			l.Name = "Ignored"
+			l.Parent = y
 			if
 				Settings["Webhook Store Fruit"]
 				and Settings["Select Rarity Fruit"]
-				and (b.List[fruitName] and Settings["Select Rarity Fruit"][b.List[fruitName].Rarity.Name] or SkinFruit[y.Name])
+				and (b.List[E] and Settings["Select Rarity Fruit"][b.List[E].Rarity.Name] or SkinFruit[y.Name])
 			then
 				getgenv().WebhookStoreFruit(y.Name)
 			end
@@ -12100,7 +11995,7 @@ function BuyBoatAndTeleBoat(P)
 	if not Settings["Auto Sea Event"] and not P then
 		return
 	end
-	if not Y or (Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 2500) then
+	if not Y or (Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 500) then
 		local H = CFrame.new(-13.488054275512695, 10.311711311340332, 2927.692)
 		H = if game.PlaceId == getgenv().CheckPlaceId
 			then (CFrame.new(-16204.0810546875, 9.0863618850708, 479.2259521484375))
@@ -13756,6 +13651,20 @@ LeviathanEventSection.CreateToggle(
 	end
 )
 LeviathanEventSection.CreateToggle(
+	{ Title = "Auto Fire Shoot Heart Leviathan", Desc = nil, Default = Settings["Auto Fire Shoot Heart Leviathan"] or false },
+	function(value)
+		if value then
+			task.spawn(function()
+				while Settings["Auto Fire Shoot Heart Leviathan"] and task.wait(0.1) do
+					pcall(AutoFireLeviathanHeart)
+				end
+			end)
+		end
+		SaveSettings("Auto Fire Shoot Heart Leviathan", value)
+	end
+)
+
+LeviathanEventSection.CreateToggle(
 	{ Title = "Use Click M1 Fruit Leviathan", Desc = nil, Default = Settings["Use Click M1 Fruit Leviathan"] or false },
 	function(b)
 		SaveSettings("Use Click M1 Fruit Leviathan", b)
@@ -13849,6 +13758,25 @@ function ShootHeartLeviathan()
 		end
 	end
 end
+LeviathanEventSection.CreateToggle(
+	{
+		Title = "Auto Fire Shoot Heart Leviathan",
+		Desc = nil,
+		Default = Settings["Auto Fire Shoot Heart Leviathan"] or false,
+	},
+	function(b)
+		if b then
+			spawn(function()
+				while Settings["Auto Fire Shoot Heart Leviathan"] and (task.wait(0.1)) do
+					local s, s = pcall(function()
+						ShootHeartLeviathan()
+					end)
+				end
+			end)
+		end
+		SaveSettings("Auto Fire Shoot Heart Leviathan", b)
+	end
+)
 LeviathanEventSection.CreateToggle(
 	{ Title = "Teleport Frozen Dimension", Desc = nil, Default = Settings["Teleport Frozen Dimension"] or false },
 	function(b)
@@ -20650,15 +20578,15 @@ require(game:GetService("ReplicatedStorage").Modules.CombatUtil).GetTargetPositi
 end
 MISCPVPSection = PvpTab.CreateSection("MISC PVP")
 MISCPVPSection.CreateSlider(
-	{ Title = "Input WalkSpeed", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input WalkSpeed"]) or 200, 220), Precise = true },
+	{ Title = "Input WalkSpeed", Min = 0, Max = 500, Default = Settings["Input WalkSpeed"] or 200, Precise = true },
 	function(b)
-		SaveSettings("Input WalkSpeed", math.clamp(tonumber(b) or 0, 0, 220))
+		SaveSettings("Input WalkSpeed", b)
 	end
 )
 MISCPVPSection.CreateSlider(
-	{ Title = "Input JumpPower", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input JumpPower"]) or 200, 220), Precise = true },
+	{ Title = "Input JumpPower", Min = 0, Max = 500, Default = Settings["Input JumpPower"] or 200, Precise = true },
 	function(b)
-		SaveSettings("Input JumpPower", math.clamp(tonumber(b) or 0, 0, 220))
+		SaveSettings("Input JumpPower", b)
 	end
 )
 MISCPVPSection.CreateToggle(
@@ -20671,7 +20599,7 @@ MISCPVPSection.CreateToggle(
 			if Humanoid then
 				Humanoid.UseJumpPower = true
 				if b then
-					Humanoid.JumpPower = math.clamp(tonumber(Settings["Input JumpPower"]) or 50, 0, 220)
+					Humanoid.JumpPower = tonumber(Settings["Input JumpPower"]) or 50
 				else
 					Humanoid.JumpPower = 50
 				end
@@ -20687,9 +20615,8 @@ MISCPVPSection.CreateToggle(
 			local Character = t.Character
 			local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
 			if Humanoid then
-				local speed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
 				if b then
-					Humanoid.WalkSpeed = speed
+					Humanoid.WalkSpeed = tonumber(Settings["Input WalkSpeed"]) or 16
 				else
 					Humanoid.WalkSpeed = 16
 				end
@@ -21503,55 +21430,42 @@ if not getgenv().BananaCatMainLoop then
 				end
 			end
 		end)
-		local function ApplyMovementSettings()
-	local Character = t.Character
-	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-	if not Humanoid then return end
-
-	pcall(function()
-		if Settings["Change WalkSpeed"] then
-			Humanoid.WalkSpeed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
-		else
-			Humanoid.WalkSpeed = 16
-		end
-
-		Humanoid.UseJumpPower = true
-		if Settings["Change JumpPower"] then
-			Humanoid.JumpPower = math.clamp(tonumber(Settings["Input JumpPower"]) or 50, 0, 220)
-		else
-			Humanoid.JumpPower = 50
-		end
-	end)
-end
-
-ApplyMovementSettings()
-if t.CharacterAdded then
-	t.CharacterAdded:Connect(function()
-		task.wait(0.25)
-		ApplyMovementSettings()
-	end)
-end
-
-task.spawn(function()
-	while task.wait(0.15) do
-		ApplyMovementSettings()
-	end
-end)
+		task.spawn(function()
+			while task.wait(0.15) do
+				local Character = t.Character
+				local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+				if Humanoid then
+					pcall(function()
+						Humanoid.UseJumpPower = true
+						if Settings["Change WalkSpeed"] then
+							Humanoid.WalkSpeed = tonumber(Settings["Input WalkSpeed"]) or 16
+						end
+						if Settings["Change JumpPower"] then
+							Humanoid.JumpPower = tonumber(Settings["Input JumpPower"]) or 50
+						end
+					end)
+				end
+			end
+		end)
 		if tick() - lastFruitTick >= 0.5 then
 			lastFruitTick = tick()
 			local T, T = pcall(function()
 				if Settings["Random Devil Fruit"] then
-					local playerGui = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
-					local spinnerWindow = playerGui and playerGui:FindFirstChild("SpinnerWindow")
-					if not spinnerWindow or not spinnerWindow.Enabled then
+					if
+						not game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow")
+						or not game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow").Enabled
+					then
 						RandomFruit()
-					else
-						local above = spinnerWindow:FindFirstChild("AboveSpinner")
-						local navigation = above and above:FindFirstChild("Navigation")
-						local closeButton = navigation and navigation:FindFirstChild("CloseButton")
-						if closeButton and closeButton.Visible then
-							pcall(function() Spinner:Close() end)
-						end
+					elseif
+						game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow").Enabled
+						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow:FindFirstChild("AboveSpinner")
+						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow.AboveSpinner:FindFirstChild("Navigation")
+						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow.AboveSpinner.Navigation:FindFirstChild("CloseButton")
+						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow.AboveSpinner.Navigation.CloseButton.Visible
+					then
+						pcall(function()
+							Spinner:Close()
+						end)
 					end
 				end
 				if Settings["Auto Trade Bone"] then
@@ -22149,8 +22063,8 @@ end
 
 -- [BANANA CAT RECOVERED] CollectCombatTargetsFactory
 
--- [PASS31 SOURCE BODY] BypassTp
-function BypassTp(target)
+-- [PASS31 SOURCE BODY] BypassTp (legacy helper; keep the active BypassTp table above intact)
+function BypassTpLegacy(target)
     if not target then
         return nil
     end
