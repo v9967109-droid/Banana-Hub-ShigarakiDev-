@@ -14166,6 +14166,29 @@ function ChangeSpeedBoat()
 		s.VehicleSeat.MaxSpeed = b
 	end
 end
+function ChangeSpeedBoat()
+	local b, s = tonumber(Settings["Value Speed Boat"]) or 200, checkSpeedboat()
+	if s then
+		s.VehicleSeat.MaxSpeed = b
+	end
+end
+BoatSettingSection.CreateToggle(
+	{ Title = "Change Speed Boat", Desc = nil, Default = Settings["Change Speed Boat"] or false },
+	function(b)
+		if b then
+			spawn(function()
+				while Settings["Change Speed Boat"] and (task.wait(0.3)) do
+					local s, X = pcall(ChangeSpeedBoat)
+					if not s then
+						WarnOnce("ChangeSpeedBoat", "Change Speed Boat loi: " .. tostring(X))
+					end
+				end
+			end)
+		end
+		SaveSettings("Change Speed Boat", b)
+	end
+)
+
 RaceMain = Main.CreatePage({ Page_Name = "Upgrade Race", Page_Title = "Upgrade Race" })
 RaceDracoMain = Main.CreatePage({ Page_Name = "Race Draco", Page_Title = "Race Draco" })
 RaceDracoSection = RaceDracoMain.CreateSection("Race Draco")
@@ -20534,7 +20557,7 @@ require(game:GetService("ReplicatedStorage").Modules.CombatUtil).GetTargetPositi
 end
 MISCPVPSection = PvpTab.CreateSection("MISC PVP")
 MISCPVPSection.CreateSlider(
-	{ Title = "Input WalkSpeed", Min = 0, Max = 500, Default = Settings["Input WalkSpeed"] or 200, Precise = true },
+	{ Title = "Input WalkSpeed", Min = 0, Max = 300, Default = Settings["Input WalkSpeed"] or 200, Precise = true },
 	function(b)
 		SaveSettings("Input WalkSpeed", b)
 	end
