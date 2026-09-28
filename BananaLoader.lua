@@ -5310,6 +5310,25 @@ function toTarget(P, e)
 			end
 			return
 		end
+		if Settings["Use Portals Rip Indra"] and ToggleNoclip() then
+			local PortalTool = t.Character:FindFirstChild("Portal-Portal") or t.Backpack:FindFirstChild("Portal-Portal")
+			if PortalTool and PortalTool:FindFirstChild("Level") and PortalTool.Level.Value > 200 and _() then
+				local BestName, BestPosition, BestDistance
+				for Name, Position in pairs(Q[game.Workspace:GetAttribute("MAP")] or {}) do
+					local FromTarget = (P.Position - Position).Magnitude
+					local FromPlayer = (H.Position - Position).Magnitude
+					if FromTarget <= 3000 and FromPlayer >= 2500 and (not BestDistance or FromTarget < BestDistance) then
+						BestName, BestPosition, BestDistance = Name, Position, FromTarget
+					end
+				end
+				if BestName and o(BestName) then
+					getgenv().noclip = true
+					local Deadline = tick() + 6
+					repeat task.wait(0.2) until (H.Position - BestPosition).Magnitude < 500 or tick() > Deadline
+					return
+				end
+			end
+		end
 		if Settings["Use Portal Teleport"] then
 			local d = t.Character:FindFirstChild("Portal-Portal") or (t.Backpack:FindFirstChild("Portal-Portal"))
 			if d and d.Level.Value > 200 and (_()) then
@@ -5427,8 +5446,8 @@ function toTarget(P, e)
 			return
 		end
 	end
-	if ShouldResetTeleportSmart(P) then
-		if BypassTp.TweenBypass(P) then
+	if (Settings["Bypass Teleport"] or Settings["Reset Teleport"]) and ToggleNoclip() then
+		if BypassTp and type(BypassTp.TweenBypass) == "function" and BypassTp.TweenBypass(P) then
 			return
 		end
 	end
@@ -6420,9 +6439,15 @@ SettingFarmMainSection.CreateSlider(
 )
 SettingFarmMainSection.CreateToggle(
 	{ Title = "Use Portal Teleport", Desc = nil, Default = Settings["Use Portal Teleport"] or false },
-	function(I)
-		SaveSettings("Use Portal Teleport", I)
-	end
+	function(I) SaveSettings("Use Portal Teleport", I) end
+)
+SettingFarmMainSection.CreateToggle(
+	{ Title = "Bypass Teleport", Desc = "Usa bypass em viagens longas enquanto uma função estiver ativa", Default = Settings["Bypass Teleport"] or false },
+	function(I) SaveSettings("Bypass Teleport", I) end
+)
+SettingFarmMainSection.CreateToggle(
+	{ Title = "Use Portals Rip Indra", Desc = "Usa portais para chegar às ilhas mais rápido durante funções ativas", Default = Settings["Use Portals Rip Indra"] or false },
+	function(I) SaveSettings("Use Portals Rip Indra", I) end
 )
 SettingFarmMainSection.CreateSlider(
 	{ Title = "Bring Mob Count", Min = 2, Max = 6, Default = Settings["Bring Mob Count"] or 2, Precise = true },
@@ -10571,17 +10596,51 @@ RaidsSection.CreateToggle(
 	end
 )
 getgenv().KillRaidEnemy = function()
-	for b, b in ipairs(game.workspace.Enemies:GetChildren()) do
-		if IsMobAlive(b) then
-			b.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-		end
+	local Enemies = workspace:FindFirstChild("Enemies")
+	if not Enemies then return end
+	for _, Enemy in ipairs(Enemies:GetChildren()) do
+		pcall(function()
+			if IsMobAlive(Enemy) then
+				Enemy.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+				Enemy.Humanoid.Health = 0
+			end
+		end)
 	end
 end
+
 getgenv().KillRaidEnemyLowhealth = function()
-	for b, b in ipairs(game.workspace.Enemies:GetChildren()) do
-		if IsMobAlive(b) and b.Humanoid.Health / b.Humanoid.MaxHealth < 0.2 then
-			b.Humanoid.Health = 0
-		end
+	local Enemies = workspace:FindFirstChild("Enemies")
+	if not Enemies then return end
+	for _, Enemy in ipairs(Enemies:GetChildren()) do
+		pcall(function()
+			if IsMobAlive(Enemy) and Enemy.Humanoid.MaxHealth > 0 and Enemy.Humanoid.Health / Enemy.Humanoid.MaxHealth < 0.2 then
+				Enemy.Humanoid.Health = 0
+			end
+		end)
+	end
+end
+
+getgenv().KillAuraRaidAndVolcano = function()
+	local Enemies = workspace:FindFirstChild("Enemies")
+	if not Enemies then return end
+	local Gui = t:FindFirstChild("PlayerGui")
+	local MainGui = Gui and Gui:FindFirstChild("Main")
+	local TopHUD = MainGui and MainGui:FindFirstChild("TopHUDList")
+	local RaidTimer = TopHUD and TopHUD:FindFirstChild("RaidTimer")
+	local PrehistoricTimer = TopHUD and TopHUD:FindFirstChild("PrehistoricRaidTimer")
+	if not ((RaidTimer and RaidTimer.Visible) or (PrehistoricTimer and PrehistoricTimer.Visible)) then return end
+	for _, Enemy in ipairs(Enemies:GetChildren()) do
+		pcall(function()
+			if IsMobAlive(Enemy) then
+				local Humanoid = Enemy:FindFirstChildOfClass("Humanoid")
+				if Humanoid then
+					Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+					Humanoid.Health = 0
+				end
+			end
+		end)
+	end
+end
 	end
 end
 function DetectMobRaid()
@@ -10752,14 +10811,9 @@ RaidsSection.CreateToggle({ Title = "Auto Raid", Desc = nil, Default = Settings[
 						if l then
 							repeat
 								task.wait()
-								if not getgenv().KillMobRaid and Settings["Kill Aura Only Raid And Volcano"] then
-									getgenv().KillMobRaid = true
-									local y = Settings["Time Delay Kill"] or 5
-									l.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-									delay(y, function()
-										getgenv().KillMobRaid = false
-									end)
-								end
+								if Settings["Kill Aura Only Raid And Volcano"] then
+							getgenv().KillAuraRaidAndVolcano()
+						end
 								UsedualFlock()
 								ClickM1(l)
 								sizepart(l)
@@ -11038,45 +11092,77 @@ local function b()
 	end
 	return false
 end
-function RandomFruit()
-	b()
-end
-function DetectCountDF()
-	local b = getbackpack()
-	if #b < 1 then
-		return
+local function CloseFruitSpinner()
+	local PlayerGui = t:FindFirstChild("PlayerGui")
+	local SpinnerWindow = PlayerGui and PlayerGui:FindFirstChild("SpinnerWindow")
+	if not SpinnerWindow or not SpinnerWindow.Enabled then return false end
+	local CloseButton = SpinnerWindow:FindFirstChild("CloseButton", true)
+	if not CloseButton then
+		pcall(function() Spinner:Close() end)
+		return false
 	end
-	local E, l = t.Data.FruitCap.Value, B()
-	for y, P in b, nil, nil do
-		y = P:GetAttribute("OriginalName")
-		for b, b in l, nil, nil do
-			if b.Type == "Blox Fruit" and (b.Name == y and b.Count < E or b.Name ~= y) then
-				return true
-			end
+	pcall(function() if CloseButton:IsA("GuiButton") then CloseButton:Activate() end end)
+	pcall(function()
+		for _, Connection in ipairs(getconnections(CloseButton.Activated)) do
+			pcall(function() Connection:Fire() end)
+			pcall(function() Connection.Function() end)
+		end
+	end)
+	pcall(function()
+		for _, Connection in ipairs(getconnections(CloseButton.MouseButton1Click)) do
+			pcall(function() Connection:Fire() end)
+			pcall(function() Connection.Function() end)
+		end
+	end)
+	pcall(function() Spinner:Close() end)
+	return true
+end
+
+function RandomFruit()
+	local Success = false
+	pcall(function() Success = b() == true end)
+	return Success
+end
+
+function DetectCountDF()
+	local Backpack = getbackpack()
+	if #Backpack < 1 then return end
+	local Capacity = t.Data.FruitCap.Value
+	local Inventory = B()
+	for _, FruitToolName in ipairs(Backpack) do
+		local Tool = t.Backpack:FindFirstChild(FruitToolName) or (t.Character and t.Character:FindFirstChild(FruitToolName))
+		local OriginalName = Tool and Tool:GetAttribute("OriginalName")
+		for _, Item in ipairs(Inventory) do
+			if Item.Type == "Blox Fruit" and (Item.Name == OriginalName or Item.Name == FruitToolName) and Item.Count < Capacity then return true end
 		end
 	end
 end
+
 local b = require(game:GetService("ReplicatedStorage").FruitInfo)
-function StoreFruit(E)
-	for l, y in pairs(E:GetChildren()) do
-		if y:IsA("Tool") and (string.find(y.Name, "Fruit")) and not y:FindFirstChild("Ignored") then
-			l = string.gsub(y.Name, " Fruit", "")
-			local E
-			E = y:GetAttribute("OriginalName") or l .. "-" .. l
-			pcall(function()
-				game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", E, y)
-			end)
-			local l = Instance.new("IntValue")
-			l.Name = "Ignored"
-			l.Parent = y
-			if
-				Settings["Webhook Store Fruit"]
-				and Settings["Select Rarity Fruit"]
-				and (b.List[E] and Settings["Select Rarity Fruit"][b.List[E].Rarity.Name] or SkinFruit[y.Name])
-			then
-				getgenv().WebhookStoreFruit(y.Name)
+function StoreFruit(Container)
+	if not Container then return end
+	for _, Tool in ipairs(Container:GetChildren()) do
+		if Tool:IsA("Tool") and string.find(Tool.Name, "Fruit") and not Tool:FindFirstChild("Ignored") then
+			local StorageName = Tool:GetAttribute("OriginalName")
+			if not StorageName then
+				local BaseName = string.gsub(Tool.Name, " Fruit$", "")
+				if BaseName == "Bird: Falcon" then StorageName = "Bird-Bird: Falcon"
+				elseif BaseName == "Bird: Phoenix" then StorageName = "Bird-Bird: Phoenix"
+				elseif BaseName == "Human: Buddha" then StorageName = "Human-Human: Buddha"
+				else StorageName = BaseName .. "-" .. BaseName end
 			end
-			task.wait(2)
+			local Success, Result = pcall(function()
+				return game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", StorageName, Tool)
+			end)
+			if Success and Result ~= false then
+				local Ignored = Instance.new("IntValue")
+				Ignored.Name = "Ignored"
+				Ignored.Parent = Tool
+				if Settings["Webhook Store Fruit"] and Settings["Select Rarity Fruit"] and (b.List[StorageName] and Settings["Select Rarity Fruit"][b.List[StorageName].Rarity.Name] or SkinFruit[Tool.Name]) then
+					pcall(function() getgenv().WebhookStoreFruit(Tool.Name) end)
+				end
+				task.wait(0.5)
+			end
 		end
 	end
 end
@@ -15160,14 +15246,9 @@ function FullyDraco()
 								equiptool(NameWeapon(Settings["Select Weapon Kill Golem"] or "Melee"))
 								getgenv().ClickM1Volcano(g)
 							end
-							if not getgenv().KillMobRaid and Settings["Kill Aura Only Raid And Volcano"] then
-								getgenv().KillMobRaid = true
-								local R = Settings["Time Delay Kill"] or 5
-								g.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-								delay(R, function()
-									getgenv().KillMobRaid = false
-								end)
-							end
+							if Settings["Kill Aura Only Raid And Volcano"] then
+							getgenv().KillAuraRaidAndVolcano()
+						end
 						until not IsMobAlive(g)
 							or not Settings["Fully Trial Draco"]
 							or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")
@@ -19517,14 +19598,9 @@ function AutoAttackVolcano()
 						equiptool(NameWeapon(Settings["Select Weapon Kill Golem"] or "Melee"))
 						getgenv().ClickM1Volcano(g)
 					end
-					if not getgenv().KillMobRaid and Settings["Kill Aura Only Raid And Volcano"] then
-						getgenv().KillMobRaid = true
-						local f = Settings["Time Delay Kill"] or 5
-						g.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-						delay(f, function()
-							getgenv().KillMobRaid = false
-						end)
-					end
+					if Settings["Kill Aura Only Raid And Volcano"] then
+							getgenv().KillAuraRaidAndVolcano()
+						end
 				until not IsMobAlive(g) or not Settings["Auto Event Prehistoric Island"]
 			end
 			g = DetectRockVolcano()
@@ -20023,14 +20099,9 @@ function FullyEventVolcano()
 						equiptool(NameWeapon(Settings["Select Weapon Kill Golem"] or "Melee"))
 						getgenv().ClickM1Volcano(g)
 					end
-					if not getgenv().KillMobRaid and Settings["Kill Aura Only Raid And Volcano"] then
-						getgenv().KillMobRaid = true
-						local f = Settings["Time Delay Kill"] or 5
-						g.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-						delay(f, function()
-							getgenv().KillMobRaid = false
-						end)
-					end
+					if Settings["Kill Aura Only Raid And Volcano"] then
+							getgenv().KillAuraRaidAndVolcano()
+						end
 				until not IsMobAlive(g) or not Settings["Fully Event Prehistoric Island"]
 			end
 			g = DetectRockVolcano()
@@ -21457,32 +21528,37 @@ if not getgenv().BananaCatMainLoop then
 end
 
 ApplyMovementSettings()
-if t.CharacterAdded then
-	t.CharacterAdded:Connect(function()
-		task.wait(0.25)
-		ApplyMovementSettings()
+local WalkSpeedConnection
+local function BindWalkSpeedProtection(Character)
+	if WalkSpeedConnection then pcall(function() WalkSpeedConnection:Disconnect() end) end
+	WalkSpeedConnection = nil
+	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+	if not Humanoid then return end
+	WalkSpeedConnection = Humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+		if Settings["Change WalkSpeed"] then
+			local Speed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
+			if math.abs(Humanoid.WalkSpeed - Speed) > 0.01 then Humanoid.WalkSpeed = Speed end
+		end
 	end)
 end
-
-task.spawn(function()
-	while task.wait(0.15) do
+if t.CharacterAdded then
+	t.CharacterAdded:Connect(function(Character)
+		task.wait(0.25)
 		ApplyMovementSettings()
-	end
-end)
+		BindWalkSpeedProtection(Character)
+	end)
+end
+BindWalkSpeedProtection(t.Character)
+task.spawn(function() while task.wait(0.15) do ApplyMovementSettings() end end)
 		if tick() - lastFruitTick >= 0.5 then
 			lastFruitTick = tick()
 			local T, T = pcall(function()
 				if Settings["Random Devil Fruit"] then
-					if
-						not game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow")
-						or not game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow").Enabled
-					then
+					local SpinnerWindow = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow")
+					if not SpinnerWindow or not SpinnerWindow.Enabled then
 						RandomFruit()
-					elseif
-						game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow").Enabled
-						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow.AboveSpinner.Navigation.CloseButton.Visible
-					then
-						Spinner:Close()
+					else
+						CloseFruitSpinner()
 					end
 				end
 				if Settings["Auto Trade Bone"] then
