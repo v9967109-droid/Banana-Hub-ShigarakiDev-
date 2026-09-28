@@ -147,30 +147,25 @@ function SaveSettings(b, t, A)
 		Settings[b][t] = A
 	elseif b ~= nil then
 		Settings[b] = t
-		if t == false and (
-			b == "Start Farm" or
-			b == "Auto Crafting Volcanic Magnet" or
-			b == "Auto Event Prehistoric Island" or
-			b == "Fully Event Prehistoric Island" or
-			b == "Auto Find Prehistoric Island" or
-			b == "Auto Collect Bone" or
-			b == "Auto Collect Egg" or
-			b == "Auto Upgrade Race V2-V3" or
-			b == "Auto Upgrade Race V2-V3 Draco" or
-			b == "Teleport Player" or
-			b == "Auto Buy Boat Beast Hunter" or
-			b == "Use Portal Teleport"
-		) then
+		if t == false then
 			pcall(function()
-				TweenManager.CancelCurrent()
+				if TweenManager and TweenManager.CancelCurrent then
+					TweenManager.CancelCurrent()
+				end
+				getgenv().noclip = false
 				local character = game.Players.LocalPlayer.Character
 				local root = character and character:FindFirstChild("HumanoidRootPart")
+				local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 				if root then
 					root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 					root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+					local float = root:FindFirstChild("FloatForce")
+					if float then float:Destroy() end
 				end
-				if b == "Use Portal Teleport" then
-					getgenv().noclip = false
+				if humanoid then
+					humanoid.PlatformStand = false
+					humanoid.AutoRotate = true
+					humanoid.Jump = false
 				end
 			end)
 		end
@@ -1733,429 +1728,7 @@ game:GetService("Players").LocalPlayer.Idled:connect(function()
 end)
 local A =
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/obiiyeuem/vthangsitink/refs/heads/main/zzzz.lua"))()
-Main = A.CreateMain({ Title = "Blox Fruit", Desc = " - Blox Fruit (Cracked by XNiczzz :3)" })
-
--- ============================================================================
--- PASS 30 - GUARANTEED TAB REGISTRY
--- The original source creates pages progressively. If a later runtime section
--- errors before its CreatePage call, those tabs never reach the UI. To preserve
--- the original page set while preventing that failure mode, CreatePage is
--- cached by Page_Name and all recovered pages are registered immediately after
--- the main window is created. Later source blocks reuse these same page objects.
--- No tab content is fabricated here; this only guarantees page registration.
--- ============================================================================
-do
-    local __BF_OriginalCreatePage = Main.CreatePage
-    local __BF_PageCache = {}
-    local __BF_PageSpecs = {
-        { Page_Name = "Shop", Page_Title = "Shop" },
-        { Page_Name = "Status And Server", Page_Title = "Status And Server" },
-        { Page_Name = "LocalPlayer", Page_Title = "LocalPlayer" },
-        { Page_Name = "Setting Farm", Page_Title = "Setting Farm" },
-        { Page_Name = "Hold and Select Skill", Page_Title = "Setting Hold and Select Skill" },
-        { Page_Name = "Farming", Page_Title = "Farming" },
-        { Page_Name = "Stack Farming", Page_Title = "Stack Farming" },
-        { Page_Name = "Farming Orther", Page_Title = "Farming Orther" },
-        { Page_Name = "Fruits and Raid,Dunge", Page_Title = "Fruits and Raid,Dunge" },
-        { Page_Name = "Sea Event", Page_Title = "Sea Event Tab" },
-        { Page_Name = "Auto Kill Player In Trial", Page_Title = "Auto Kill Player In Trial" },
-        { Page_Name = "Get and Upgrade Items", Page_Title = "Get and Upgrade Items Tab" },
-        { Page_Name = "Volcano Event", Page_Title = "Volcano Event Tab" },
-        { Page_Name = "ESP", Page_Title = "ESP Tab" },
-        { Page_Name = "PVP", Page_Title = "PVP Tab" },
-        { Page_Name = "Tab Webhook", Page_Title = "Tab Webhook" },
-        { Page_Name = "Setting", Page_Title = "Setting Tab" },
-        -- Source-declared additional pages from BananaCatOriginalUI.Pages / BuildMissingPages.
-        { Page_Name = "Race Normal", Page_Title = "Race Normal" },
-        { Page_Name = "Race Draco", Page_Title = "Race Draco" },
-        { Page_Name = "Race V4", Page_Title = "Race V4" },
-        { Page_Name = "Fishing", Page_Title = "Fishing" },
-        { Page_Name = "Kitsune Event", Page_Title = "Kitsune Event" },
-    }
-
-    local function __BF_CreatePageCached(a, b)
-        local spec = (a == Main) and b or a
-        if type(spec) ~= "table" then
-            return nil
-        end
-        local name = spec.Page_Name or spec.Page_Title or "Default Page"
-        local existing = __BF_PageCache[name]
-        if existing then
-            return existing
-        end
-        local ok, page = pcall(function()
-            return __BF_OriginalCreatePage(spec)
-        end)
-        if (not ok or not page) then
-            ok, page = pcall(function()
-                return __BF_OriginalCreatePage(Main, spec)
-            end)
-        end
-        if ok and page then
-            __BF_PageCache[name] = page
-            return page
-        end
-        return nil
-    end
-
-    Main.CreatePage = __BF_CreatePageCached
-    for _, spec in ipairs(__BF_PageSpecs) do
-        __BF_PageCache[spec.Page_Name] = __BF_CreatePageCached(spec)
-    end
-    -- A second pass handles UI libraries that finish binding CreatePage only after
-    -- the first few pages are created. No page content is synthesized.
-    for _, spec in ipairs(__BF_PageSpecs) do
-        if not __BF_PageCache[spec.Page_Name] then
-            task.defer(function()
-                local page = __BF_CreatePageCached(spec)
-                __BF_PageCache[spec.Page_Name] = page
-            end)
-        end
-    end
-    local __BF_PageStatus = {}
-    for _, spec in ipairs(__BF_PageSpecs) do
-        __BF_PageStatus[spec.Page_Name] = __BF_PageCache[spec.Page_Name] ~= nil
-    end
-
-    getgenv().__BF_BananaCatPages = __BF_PageCache
-    getgenv().__BF_BananaCatPageStatus = __BF_PageStatus
-
-    -- Source-derived page vocabulary + exact BuildMissingPages recovery.
-    -- This adds the six pages that the 17-page executable set did not instantiate.
-    getgenv().BananaCatOriginalUI = getgenv().BananaCatOriginalUI or {}
-    BananaCatOriginalUI.Pages = {
-        "Status And Server",
-        "LocalPlayer",
-        "Setting Farm",
-        "Hold and Select Skill",
-        "Farming",
-        "Stack Farming",
-        "Farming Orther",
-        "Fruits and Raid,Dunge",
-        "Sea Event",
-        "Race Normal",
-        "Race Draco",
-        "Race V4",
-        "Auto Kill Player In Trial",
-        "Fishing",
-        "Volcano Event",
-        "Kitsune Event",
-        "Webhook",
-        "PVP Tab",
-        "ESP Tab",
-        "Shop",
-        "Setting Tab"
-    }
-    BananaCatOriginalUI.Sections = {
-        "Status",
-        "SectionServer",
-        "SettingFarmMainSection",
-        "SettingAutoFarmSection",
-        "HoldSkillsSection",
-        "FarmObservationSection",
-        "FarmotherMain",
-        "stackFarmMain",
-        "StackDevilFruitSection",
-        "SectionLocalPlayerMain",
-        "LocalPlayerMain",
-        "SettingSkillMain",
-        "LeviathanEventSection",
-        "SettingSeaEventSection",
-        "FarmingSeaEventSection",
-        "SeaEventTab",
-        "GetItemsSection",
-        "BossRipIndraSection",
-        "BossSoulReaperSection",
-        "BossDoughKingSection",
-        "BossDarkbeardSection",
-        "AutoKillBossSection",
-        "AutoKillMobSection",
-        "AttackAllMobSection",
-        "RaidsSection",
-        "MultiRaidsSection",
-        "DungeonSection",
-        "DungeonJoinSection",
-        "RaceNormalSection",
-        "RaceDracoSection",
-        "RaceV4Section",
-        "KillTrialSection",
-        "UpgradeWeaponSection",
-        "MasteryFarmSection",
-        "MasteryWeaponSection",
-        "FarmingMaterialSection",
-        "FarmingVolcanoSection",
-        "FullyVolcanoSection",
-        "BerrySection",
-        "ESPSection",
-        "MISCPVPSection",
-        "FishingSection",
-        "KitsuneEventSection",
-        "EventGameSection",
-        "SectionShopMisc",
-        "SectionShopFighting",
-        "SectionShopAbilities",
-        "SectionWebhook",
-        "BoatSettingSection",
-        "SettingsVolcanoSection",
-        "SettingsAimbotSection"
-    }
-    BananaCatOriginalUI.Controls = {
-        "Select Owner Boat Find Leviathan",
-        "Speed Boat Auto Drive",
-        "Select Weapon",
-        "Auto Tushita",
-        "Auto Get Ghoul",
-        "Hop Server Get Ghoul",
-        "Select Sea Events",
-        "Use Dragonstorm For Sea Event",
-        "Auto Change Dragonstorm With Skull Guitar",
-        "Use Click M1 Fruit For Sea Event",
-        "Use Click M1 Skull Guitar For Sea Event",
-        "Auto Change Dragonstorm When Kill Boat",
-        "Auto Sea Event",
-        "Time Hop Server",
-        "Select Method Farm",
-        "Farm Material",
-        "Select Material",
-        "Auto Quest [Katakuri/Bone/Tyrant]",
-        "Auto Finish Train Quest",
-        "Auto Finish Train Draco Quest",
-        "Start Farm",
-        "Ignore Attack Katakuri",
-        "Hop Find Katakuri",
-        "Stack Train With Trial Race",
-        "Hop Server [Trial Or Pull Lever]",
-        "Multi Trial",
-        "Auto Turn On V3 Near Door",
-        "Auto Reset Character",
-        "Auto Trial",
-        "Auto UP Observation V2",
-        "Auto Upgrade Race V2-V3",
-        "Auto Get Fully Cyborg",
-        "Auto Get Cyborg Hop Collect Chest",
-        "Auto Get Cyborg",
-        "Fully Event Prehistoric Island",
-        "Webhook Find Prehistoric Island",
-        "Select Method Kill Golem",
-        "Select Weapon Kill Golem",
-        "Kill Aura Only Raid And Volcano",
-        "Time Delay Kill",
-        "Fix Volcano Safe",
-        "Bring Mob",
-        "Auto Soul Guitar",
-        "Kill All Boss",
-        "Select Boss",
-        "Hop Server Find Boss",
-        "Auto Upgrade Sword Inventory",
-        "Auto Upgrade Gun Inventory",
-        "Auto Quest Dragon Hunter",
-        "Auto Saber",
-        "Auto Find Prehistoric Island",
-        "Select Quest Fishing",
-        "Auto Get Rainbow Haki",
-        "Auto Quest Dojo Trainer",
-        "Account Pick Slot Raid",
-        "Account Buy Chip",
-        "Select Raid",
-        "Get Fruit In Inventory Low Beli",
-        "Select Players Multi",
-        "Select Card Priority",
-        "Auto CDK",
-        "ESP Fruit",
-        "Hop Server Kitsune Island",
-        "Select Boat",
-        "Auto Yoru Mini",
-        "Value Collect Chest to Hop",
-        "Auto Yoru Mini (Hop Server)",
-        "Auto Event Prehistoric Island",
-        "Auto Present Event",
-        "Auto Celestial Soldier",
-        "Auto Rip Commander",
-        "Auto Event Halloween",
-        "Auto Attack Dungeon",
-        "Auto Fishing",
-        "Teleport To Fruit",
-        "Auto Factory",
-        "Auto Pirate Raid",
-        "Auto Elite Hunter",
-        "Auto Touch Pad Haki",
-        "Auto Summon Rip Indra",
-        "Attack Rip Indra",
-        "Attack Soul Reaper",
-        "Attack Dough King",
-        "Attack Darkbeard",
-        "Auto Raid",
-        "Auto Shipwright",
-        "Teleport Acient Clock",
-        "Auto Pull Lever",
-        "Teleport Mirage",
-        "Teleport To Island",
-        "Teleport To Npc",
-        "Teleport Prehistoric Island",
-        "Teleport To Kitsune Island",
-        "Auto Spawn Kitsune Island",
-        "Auto Collect Soul Ember",
-        "Auto Summon Soul Ember",
-        "Auto Attack Leviathan",
-        "Auto Yama",
-        "Teleport Player",
-        "Auto Chest",
-        "Farm Observation",
-        "Kill Boss",
-        "Kill Mob",
-        "Auto New World",
-        "Auto Third World",
-        "Tween Safe if have Items",
-        "Teleport Frozen Dimension",
-        "Auto Crafting Volcanic Magnet",
-        "Auto Find Mirage",
-        "Auto Collect Bone",
-        "Auto Collect Berry",
-        "Auto Upgrade Race V2-V3 Draco",
-        "Auto Trial Draco",
-        "Follow Player Select",
-        "Auto Tween To Prehistoric Island",
-        "Auto Kill Golem",
-        "Auto Fix Volcano",
-        "Multi Find Leviathan",
-        "Auto Multi Raid",
-        "Auto Fire Shoot Heart Leviathan",
-        "Auto Buy Chip and Attack Law",
-        "Fully Trial Draco",
-        "Auto Destroy IDK",
-        "Auto TTK",
-        "Auto Attack All Mob and Boss",
-        "Auto Collect Egg",
-        "Collect Chest When Server Spawn God's Chalice or Fist of Darkness",
-        "Auto Event Magnet",
-        "Select Player PVP",
-        "Auto Chest Hop",
-        "Use Method Teleport",
-        "Bring Mob Count",
-        "Auto Buy Boat Beast Hunter",
-        "Auto Find Leviathan",
-        "Webhook Find Leviathan",
-        "Value Speed Boat",
-        "Auto Turn On V4",
-        "Auto Choose Gears",
-        "Ignore Craft Volcanic Magnet Draco",
-        "ESP Berry",
-        "Select Method Hop CDK1",
-        "Auto Sea Event With Friend",
-        "Select Friend",
-        "Reset Character Buy Boat",
-        "Tween Until Have Sea Event",
-        "Teleport Boat Other CFrame if Rough Sea",
-        "Auto Repair Ur Ship",
-        "ESP Player",
-        "Webhook Destroy IDK",
-        "Fast Attack",
-        "Super Fast Attack"
-    }
-    
-    function BananaCatOriginalUI.BuildMissingPages(Main)
-        if not Main or type(Main.CreatePage) ~= "function" then return {} end
-    
-        -- These pages are already created by the original 3tnn Main source.
-        -- Do not recreate them: duplicate pages can break/duplicate the hub UI.
-        local existingExact = {
-            ["Shop"] = true,
-            ["Status And Server"] = true,
-            ["LocalPlayer"] = true,
-            ["Setting Farm"] = true,
-            ["Hold and Select Skill"] = true,
-            ["Farming"] = true,
-            ["Stack Farming"] = true,
-            ["Farming Other"] = true,
-            ["Fruit and Raid, Dungeon"] = true,
-            ["Sea Event"] = true,
-            ["Auto Kill Player In Trial"] = true,
-            ["Get and Upgrade Items"] = true,
-            ["Volcano Event"] = true,
-            ["ESP"] = true,
-            ["PVP"] = true,
-            ["Tab Webhook"] = true,
-            ["Setting"] = true,
-        }
-    
-        -- Same feature/page under a source-specific label; keep one functional page.
-        local existingAlias = {
-            ["Farming Orther"] = true,
-            ["Fruits and Raid,Dunge"] = true,
-            ["Webhook"] = true,
-            ["PVP Tab"] = true,
-            ["ESP Tab"] = true,
-            ["Setting Tab"] = true,
-        }
-    
-        local created = {}
-        for _, name in ipairs(BananaCatOriginalUI.Pages) do
-            if not existingExact[name] and not existingAlias[name] and not created[name] then
-                local ok, page = pcall(function()
-                    return Main.CreatePage({Page_Name = name, Page_Title = name})
-                end)
-                if not ok or not page then
-                    pcall(function()
-                        page = Main:CreatePage({Page_Name = name, Page_Title = name})
-                    end)
-                end
-                if page then
-                    created[name] = page
-                end
-            end
-        end
-        return created
-    end
-    PageShop = __BF_PageCache["Shop"]
-    PageStatusAndServer = __BF_PageCache["Status And Server"]
-    LocalPlayerMain = __BF_PageCache["LocalPlayer"]
-    SettingFarmMain = __BF_PageCache["Setting Farm"]
-    SettingSkillMain = __BF_PageCache["Hold and Select Skill"]
-    FarmMain = __BF_PageCache["Farming"]
-    stackFarmMain = __BF_PageCache["Stack Farming"]
-    FarmotherMain = __BF_PageCache["Farming Orther"]
-    DFRaidMain = __BF_PageCache["Fruits and Raid,Dunge"]
-    SeaEventTab = __BF_PageCache["Sea Event"]
-    RaceMain = __BF_PageCache["Auto Kill Player In Trial"]
-    GetItemsMain = __BF_PageCache["Get and Upgrade Items"]
-    VolcanoTab = __BF_PageCache["Volcano Event"]
-    ESPTab = __BF_PageCache["ESP"]
-    PvpTab = __BF_PageCache["PVP"]
-    TabWebhook = __BF_PageCache["Tab Webhook"]
-    SettingPage = __BF_PageCache["Setting"]
-    -- Functional source pages: keep the recovered section bodies on their own original feature tabs.
-    RaceDracoMain = __BF_PageCache["Race Draco"]
-    RaceNormalMain = __BF_PageCache["Race Normal"]
-    RaceV4Main = __BF_PageCache["Race V4"]
-    FishingMain = __BF_PageCache["Fishing"]
-    KitsuneEventMain = __BF_PageCache["Kitsune Event"]
-    if Main and type(BananaCatOriginalUI.BuildMissingPages) == "function" then
-        local __BF_MissingPages = BananaCatOriginalUI.BuildMissingPages(Main)
-        getgenv().__BF_BananaCatMissingPages = __BF_MissingPages
-    end
-end
--- PASS 34: recovered setting controls that existed in the source vocabulary but had no visible UI control.
--- The runtime already references these Settings keys; no new backend behavior is fabricated here.
-do
-    local __S = nil
-    if VolcanoTab then __S = VolcanoTab.CreateSection("Recovered Event Functions") end
-    if __S then
-        __S.CreateToggle({ Title = "Auto Present Event", Desc = "Recovered setting control", Default = Settings["Auto Present Event"] or false }, function(v) SaveSettings("Auto Present Event", v) end)
-        __S.CreateToggle({ Title = "Auto Event Halloween", Desc = "Recovered setting control", Default = Settings["Auto Event Halloween"] or false }, function(v) SaveSettings("Auto Event Halloween", v) end)
-        __S.CreateToggle({ Title = "Auto Event Magnet", Desc = "Recovered setting control", Default = Settings["Auto Event Magnet"] or false }, function(v) SaveSettings("Auto Event Magnet", v) end)
-        __S.CreateToggle({ Title = "Follow Player Select", Desc = "Recovered setting control", Default = Settings["Follow Player Select"] or false }, function(v) SaveSettings("Follow Player Select", v) end)
-        __S.CreateToggle({ Title = "Auto Tween To Prehistoric Island", Desc = "Recovered setting control", Default = Settings["Auto Tween To Prehistoric Island"] or false }, function(v) SaveSettings("Auto Tween To Prehistoric Island", v) end)
-        __S.CreateToggle({ Title = "Auto Kill Golem", Desc = "Recovered setting control", Default = Settings["Auto Kill Golem"] or false }, function(v) SaveSettings("Auto Kill Golem", v) end)
-        __S.CreateToggle({ Title = "Auto Fix Volcano", Desc = "Recovered setting control", Default = Settings["Auto Fix Volcano"] or false }, function(v) SaveSettings("Auto Fix Volcano", v) end)
-        __S.CreateToggle({ Title = "Fix Volcano Safe", Desc = "Recovered setting control", Default = Settings["Fix Volcano Safe"] or false }, function(v) SaveSettings("Fix Volcano Safe", v) end)
-    end
-    if SeaEventTab then
-        local __SE = SeaEventTab.CreateSection("Recovered Sea Functions")
-        __SE.CreateToggle({ Title = "Auto Shipwright", Desc = "Recovered setting control", Default = Settings["Auto Shipwright"] or false }, function(v) SaveSettings("Auto Shipwright", v) end)
-        __SE.CreateToggle({ Title = "Auto Celestial Soldier", Desc = "Recovered setting control", Default = Settings["Auto Celestial Soldier"] or false }, function(v) SaveSettings("Auto Celestial Soldier", v) end)
-        __SE.CreateToggle({ Title = "Auto Rip Commander", Desc = "Recovered setting control", Default = Settings["Auto Rip Commander"] or false }, function(v) SaveSettings("Auto Rip Commander", v) end)
-    end
-end
+Main = A.CreateMain({ Title = "Banana Cat Hub \ By Shigaraki [Beta]", Desc = "By Shigaraki [Beta]" })
 
 PageShop = Main.CreatePage({ Page_Name = "Shop", Page_Title = "Shop" })
 getgenv().Options = A.Options
@@ -4870,6 +4443,30 @@ function ToggleNoclip()
 	then
 		return true
 	end
+
+	-- Any enabled boolean option keeps character collision disabled while active.
+	for _, value in pairs(Settings) do
+		if type(value) == "boolean" and value then
+			return true
+		end
+	end
+end
+-- Character + equipped Tool noclip enforcement.
+do
+    task.spawn(function()
+        while task.wait() do
+            if ToggleNoclip() then
+                local Character = t.Character
+                if Character then
+                    for _, Part in ipairs(Character:GetDescendants()) do
+                        if Part:IsA("BasePart") then
+                            Part.CanCollide = false
+                        end
+                    end
+                end
+            end
+        end
+    end)
 end
 local l = game:GetService("TweenService")
 getgenv().TweenManager = {
@@ -5716,34 +5313,16 @@ function toTarget(P, e)
 		if Settings["Use Portal Teleport"] then
 			local d = t.Character:FindFirstChild("Portal-Portal") or (t.Backpack:FindFirstChild("Portal-Portal"))
 			if d and d.Level.Value > 200 and (_()) then
-				local PortalTargets = { "Tiki Outpost", "Hydra Town", "Turtle Mansion" }
-				local PortalMap = l[game.Workspace:GetAttribute("MAP")] or {}
-				for _, PortalName in ipairs(PortalTargets) do
-					local PortalPosition = PortalMap[PortalName]
-					if PortalPosition and (P.Position - PortalPosition).Magnitude <= 3000 and Y >= 3000 then
-						getgenv().noclip = true
-						if o(PortalName) then
-							local PortalTimeout = tick() + 5
-							repeat
-								task.wait(0.2)
-							until t.Character and (t.Character.HumanoidRootPart.Position - PortalPosition).Magnitude < 500 or tick() > PortalTimeout
-								task.wait(1)
-							getgenv().noclip = false
-							return
-						end
-					end
-				end
-				for d, _ in pairs(PortalMap) do
+				for d, _ in pairs(l[game.Workspace:GetAttribute("MAP")] or {}) do
 					if (P.Position - _).Magnitude <= 3000 and Y >= 3000 then
 						getgenv().noclip = true
 						if o(d) then
-							local PortalTimeout = tick() + 5
+							local l = tick() + 5
 							repeat
 								task.wait(0.2)
-							until t.Character and (t.Character.HumanoidRootPart.Position - _).Magnitude < 500 or tick() > PortalTimeout
-								task.wait(1)
-								getgenv().noclip = false
-								return
+							until t.Character and (t.Character.HumanoidRootPart.Position - _).Magnitude < 500
+								or tick() > l
+							return
 						end
 					end
 				end
@@ -5860,7 +5439,7 @@ function toTarget(P, e)
 	Z = if ReadyToDodge
 		then (CFrame.new(0, 200, 0))
 		else if G then (CFrame.new(0, Settings["Distance Teleport Y"] or 800, 0)) else Z
-	Y, e = Settings["Speed Tween "] or 300, P * Z
+	Y, e = math.clamp(tonumber(Settings["Speed Tween "]) or 220, 0, 220), P * Z
 	if (e.Position - H.Position).Magnitude < 3 and not ReadyToDodge and not G then
 		TweenManager.CancelTweenOnly()
 		H.CFrame = e
@@ -6108,12 +5687,22 @@ local function m(E, l, Q)
 	if not I or not E then
 		return false
 	end
-	local _ = Q and E.Position or E.PrimaryPart and E.PrimaryPart.Position
+	local _ = Q and E.Position or (E.PrimaryPart and E.PrimaryPart.Position) or (E:FindFirstChild("HumanoidRootPart") and E.HumanoidRootPart.Position)
 	if not _ then
 		return false
 	end
+	local HitPosition = _
+	if g and g.Hit and g.Hit.Position then
+		HitPosition = g.Hit.Position
+	end
+	local Direction = (HitPosition - I.Position)
+	if Direction.Magnitude < 0.001 then
+		Direction = Vector3.new(0, 0, -1)
+	else
+		Direction = Direction.Unit
+	end
 	local o, V, N =
-		(_ - I.Position).Unit, ((g.Hit.Position - I.Position) * Vector3.new(1, 0, 1)).Unit, NameWeapon("Blox Fruit")
+		(_ - I.Position).Unit, (Direction * Vector3.new(1, 0, 1)).Unit, NameWeapon("Blox Fruit")
 	I = N and (d:FindFirstChild(N))
 	if not I then
 		return false
@@ -6166,12 +5755,31 @@ if t.Character then
 end
 t.CharacterAdded:Connect(g)
 local function m(E)
-	return t.Character
-		and (t.Character:FindFirstChild("HumanoidRootPart"))
-		and E
-		and (E:FindFirstChild("HumanoidRootPart"))
-		and E.Humanoid.Health > 0
-		and (t.Character.HumanoidRootPart.Position - E.HumanoidRootPart.Position).Magnitude < 70
+	local Character = t.Character
+	local CharacterRoot = Character and Character:FindFirstChild("HumanoidRootPart")
+	if not CharacterRoot or not E then
+		return false
+	end
+
+	local TargetRoot = E:FindFirstChild("HumanoidRootPart") or E.PrimaryPart
+	local TargetPosition
+
+	if TargetRoot then
+		TargetPosition = TargetRoot.Position
+	elseif E:IsA("Model") then
+		TargetPosition = E:GetPivot().Position
+	end
+
+	if not TargetPosition then
+		return false
+	end
+
+	local Humanoid = E:FindFirstChildOfClass("Humanoid")
+	if Humanoid and Humanoid.Health <= 0 then
+		return false
+	end
+
+	return (CharacterRoot.Position - TargetPosition).Magnitude < 70
 end
 getgenv().ClickM1 = function(E, l)
 	if not m(E) then
@@ -6210,7 +5818,7 @@ local m = L:WaitForChild("Modules")
 getgenv().SpamGunDragonStorm = function(E)
 	local l, Q = require(m.CombatUtil), t.Character
 	local d = Q and (Q:FindFirstChild("Dragonstorm"))
-	if not d or (l:IsGunReloading(d)) then
+	if not d or not E or not E.Position or (l:IsGunReloading(d)) then
 		return
 	end
 	l = getupvalues(require(L.Controllers.CombatController).Attack)[9]
@@ -6280,11 +5888,32 @@ function ShootM1(E)
 				end
 				task.wait(t.Character[NameWeapon("Gun")].Cooldown.Value)
 			else
-				local l = { [1] = "TAP", [2] = E.HumanoidRootPart.Position }
-				game:GetService("Players").LocalPlayer.Character
-					:FindFirstChild("Skull Guitar").RemoteEvent
-					:FireServer(unpack(l))
-				task.wait(t.Character[NameWeapon("Gun")].Cooldown.Value)
+				-- Skull Guitar: o alvo pode ser um vaso/Model sem HumanoidRootPart.
+				local character = game:GetService("Players").LocalPlayer.Character
+				local skull = character and character:FindFirstChild("Skull Guitar")
+				local remote = skull and skull:FindFirstChild("RemoteEvent")
+				local targetPosition
+
+				if typeof(E) == "Instance" then
+					if E:IsA("BasePart") then
+						targetPosition = E.Position
+					elseif E:IsA("Model") then
+						targetPosition = E:GetPivot().Position
+					elseif E:IsA("Attachment") then
+						targetPosition = E.WorldPosition
+					elseif E:FindFirstChild("HumanoidRootPart") then
+						targetPosition = E.HumanoidRootPart.Position
+					end
+				end
+
+				if remote and targetPosition then
+					remote:FireServer("TAP", targetPosition)
+					local tool = t.Character and t.Character:FindFirstChild(NameWeapon("Gun"))
+					local cooldown = tool and tool:FindFirstChild("Cooldown")
+					if cooldown then
+						task.wait(cooldown.Value)
+					end
+				end
 			end
 		end
 	end)
@@ -6813,14 +6442,12 @@ SettingFarmMainSection.CreateToggle(
 		SaveSettings("Reset Teleport", I)
 	end
 )
-SettingFarmMainSection.CreateSlider(
-	{ Title = "Speed Tween ", Min = 0, Max = 1000, Default = Settings["Speed Tween "] or 300, Precise = true },
-	function(I)
-		SaveSettings("Speed Tween ", I)
-	end
-)
+SaveSettings("Speed Tween ", 220)
 SettingFarmMainSection.CreateLabel({
-	Title = "Recommended: 350. If you\226\128\153re farming spots close to each other, use a higher speed",
+	Title = "Speed Tween: 220",
+})
+SettingFarmMainSection.CreateLabel({
+	Title = "Maximum speed 220 recommended",
 })
 SettingSkillMain =
 	Main.CreatePage({ Page_Name = "Hold and Select Skill", Page_Title = "Setting Hold and Select Skill" })
@@ -6920,7 +6547,8 @@ SettingAutoFarmSection.CreateToggle(
 		SaveSettings("Auto Quest [Katakuri/Bone/Tyrant]", o)
 	end
 )
-local o = SettingAutoFarmSection.CreateToggle(
+local o = SettingAutoFarmSection.CreateLabel({ Title = "Accepts automated missions according to Method Farm." })
+SettingAutoFarmSection.CreateToggle(
 	{ Title = "Start Farm", Desc = nil, Default = Settings["Start Farm"] or false },
 	function(V)
 		SaveSettings("Start Farm", V)
@@ -7152,6 +6780,8 @@ TakeQuestLevel = function()
 	if (H - B.Position).Magnitude <= 8 and C.Health > 0 then
 		wait(2)
 		CommF:InvokeServer("StartQuest", tostring(V.QuestName), V.Id)
+		local timeout = tick() + 3
+		repeat task.wait(0.1) until t.PlayerGui.Main:FindFirstChild("Quest") and t.PlayerGui.Main.Quest.Visible or tick() > timeout
 	else
 		toTarget(CFrame.new(H) * CFrame.new(0, 4, 2), true)
 	end
@@ -7589,6 +7219,69 @@ function SpecialHop(C)
 		end
 	end
 end
+
+-- Histórico local dos pontos de spawn usados pelo FarmMethod.
+-- Mantém o controle disponível para o fluxo Start Farm e evita erro quando nenhum mob está carregado.
+local N = {}
+
+-- Retorna o alvo real da missão especial ativa. A interface da missão é
+-- considerada primeiro, porque pode ser atualizada antes do GuideModule.
+local function GetActiveFarmQuestMob(QuestName, QuestId, MethodMobList)
+	local QuestGui = t.PlayerGui and t.PlayerGui.Main and t.PlayerGui.Main:FindFirstChild("Quest")
+	local Title = QuestGui and QuestGui:FindFirstChild("Container")
+		and QuestGui.Container:FindFirstChild("QuestTitle")
+		and QuestGui.Container.QuestTitle:FindFirstChild("Title")
+	local QuestText = Title and tostring(Title.Text or "") or ""
+
+	-- A quest especial informa o alvo diretamente no texto.
+	-- Ex.: "Derrote 8 Skull Slayers" -> "Skull Slayer".
+	if QuestText ~= "" then
+		local Target = QuestText:match("[Dd]errote%s+%d+%s+(.+)")
+			or QuestText:match("[Dd]efeat%s+%d+%s+(.+)")
+		if Target then
+			Target = Target:gsub("%s+$", ""):gsub("%.", "")
+			-- O texto normalmente vem no plural, enquanto o Model usa o singular.
+			if Target:sub(-3):lower() == "ies" then
+				Target = Target:sub(1, -4) .. "y"
+			elseif Target:sub(-3):lower() == "ers" then
+				Target = Target:sub(1, -2)
+			elseif Target:sub(-1):lower() == "s" then
+				Target = Target:sub(1, -2)
+			end
+			if Target ~= "" then
+				return Target
+			end
+		end
+
+		-- Fallback para listas antigas do método, caso a interface da quest não
+		-- esteja disponível naquele frame.
+		if type(MethodMobList) == "table" then
+			local LowerQuestText = QuestText:lower()
+			for _, MobName in ipairs(MethodMobList) do
+				if type(MobName) == "string" and MobName ~= "" and LowerQuestText:find(MobName:lower(), 1, true) then
+					return MobName
+				end
+			end
+		end
+	end
+
+	local ActiveMob = GetNameDoubleQuest()
+	if type(ActiveMob) == "string" and ActiveMob ~= "" then
+		return ActiveMob
+	end
+
+	local ok, Task = pcall(function()
+		return H[QuestName] and H[QuestName][QuestId] and H[QuestName][QuestId].Task
+	end)
+	if ok and type(Task) == "table" then
+		for MobName in pairs(Task) do
+			if type(MobName) == "string" and MobName ~= "" then
+				return MobName
+			end
+		end
+	end
+end
+
 function FarmMethod()
 	local f, V, H = Settings["Select Method Farm"]
 	local C, J = 9999, 2
@@ -7612,17 +7305,30 @@ function FarmMethod()
 		end
 	end
 	f = V or (GetNameDoubleQuest()) or ""
-	if not t.PlayerGui.Main:FindFirstChild("Quest").Visible and typeof(f) == "string" then
-		TakeQuestLevel()
-	else
-		if
-			Settings["Auto Quest [Katakuri/Bone/Tyrant]"]
-			and t.Data.Level.Value >= C
-			and not t.PlayerGui.Main:FindFirstChild("Quest").Visible
-		then
+	local QuestGui = t.PlayerGui and t.PlayerGui.Main and t.PlayerGui.Main:FindFirstChild("Quest")
+	local QuestVisible = QuestGui and QuestGui.Visible or false
+	local ActiveQuestMob = GetActiveFarmQuestMob(H, J, V)
+	local HasActiveSpecialQuest = typeof(ActiveQuestMob) == "string" and ActiveQuestMob ~= ""
+
+	-- Start Farm primeiro espera a missão correta. Assim que o Auto Quest
+	-- aceitar a missão, o próximo ciclo passa imediatamente para o mob da missão.
+	if Settings["Auto Quest [Katakuri/Bone/Tyrant]"] and t.Data.Level.Value >= C then
+		if HasActiveSpecialQuest then
+			-- A missão já foi aceita: nunca volta ao NPC; o nome da própria missão
+			-- passa a ser o alvo principal do Farm.
+			f = ActiveQuestMob
+		elseif not QuestVisible then
 			QuestBoneAndkatakuri(H, J)
 			return
 		end
+	elseif not QuestVisible and typeof(f) == "string" then
+		TakeQuestLevel()
+	else
+		-- Missão normal já ativa: usa o alvo informado pela própria missão.
+		if HasActiveSpecialQuest then
+			f = ActiveQuestMob
+		end
+	end
 		if not Settings["Farm Material"] and Settings["Select Method Farm"] == "Farm Tyrant of the Skies" then
 			if CheckNameBoss("Tyrant of the Skies") then
 				V = CheckNameBoss("Tyrant of the Skies")
@@ -7674,6 +7380,14 @@ function FarmMethod()
 								else
 									equiptool(NameWeapon("Gun"))
 									getgenv().SpamGunSkullGuitar(V.WorldPivot)
+									-- Disparo por input M1 real
+									local VIM = game:GetService("VirtualInputManager")
+									if VIM then
+										VIM:SendMouseButtonEvent(0, 1, 0, true, game, 0)
+										task.wait()
+										VIM:SendMouseButtonEvent(0, 1, 0, false, game, 0)
+									end
+									ClickM1(V, true)
 								end
 							else
 								getgenv().AimPos = V.WorldPivot
@@ -8955,7 +8669,8 @@ task.spawn(function()
 				end
 			end
 			if Settings["Auto Pirate Raid"] then
-				local y = GetPirateRaid() or (GetPirateRaid(true))
+				local raidActive = t.PlayerGui.Main.TopHUDList.RaidTimer.Visible
+				local y = GetPirateRaid()
 				if y then
 					getgenv().DetectRaidCastle = true
 					StackFarm = false
@@ -8969,17 +8684,11 @@ task.spawn(function()
 						ClickM1(y)
 						toTarget(y.HumanoidRootPart.CFrame * P)
 					until not IsMobAlive(y) or not Settings["Auto Pirate Raid"]
-				elseif getgenv().DetectRaidCastle then
+				elseif raidActive or getgenv().DetectRaidCastle then
 					StackFarm = false
 					StackFarmOther = false
-					local y, P = os.clock(), false
-					repeat
-						task.wait()
-						P = if GetPirateRaid() or (GetPirateRaid(true)) then true else P
-					until os.clock() - y >= 10 or P
-					if not P then
-						getgenv().DetectRaidCastle = false
-					end
+					getgenv().DetectRaidCastle = true
+					toTarget(CFrame.new(-5543, 313, -2964))
 				end
 			end
 			if Settings["Teleport To Fruit"] then
@@ -9010,7 +8719,7 @@ task.spawn(function()
 		end)
 	end
 end)
-FarmotherMain = Main.CreatePage({ Page_Name = "Farming Orther", Page_Title = "Farming Orther" })
+FarmotherMain = Main.CreatePage({ Page_Name = "Farming Other", Page_Title = "Farming Other" })
 EventEasterSection = FarmotherMain.CreateSection("Event Easter")
 EventEasterSection.CreateButton({ Title = "Open Easter Shop" }, function()
 	require(game.ReplicatedStorage.Controllers.UI.EventShop):Open("Easter2026")
@@ -9046,6 +8755,7 @@ EventEasterSection.CreateToggle(
 		SaveSettings("Auto Collect Egg Easter", V)
 	end
 )
+FishingMain = Main.CreatePage({ Page_Name = "Fishing", Page_Title = "Fishing" })
 FishingSection = FishingMain.CreateSection("Fishing")
 FishingSection.CreateToggle(
 	{ Title = "Change Size Reel", Desc = nil, Default = Settings["Change Size Reel"] or false },
@@ -12322,8 +12032,36 @@ function TurnOffNoclipBoat(P)
 		end
 	end
 end
+-- Sea Event: use the nearest owned boat so an old/far boat is not followed.
+function CheckSeaEventBoat()
+	local player = t
+	local boats = game:GetService("Workspace"):FindFirstChild("Boats")
+	if not boats or not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+		return false
+	end
+	local nearest, nearestDistance = false, math.huge
+	local ownerName = player.Name
+	if Settings["Auto Sea Event With Friend"] and Settings["Auto Sea Event"] then
+		ownerName = Settings["Select Friend"]
+	end
+	for _, boat in ipairs(boats:GetChildren()) do
+		if boat:IsA("Model") and boat:FindFirstChild("Owner") and tostring(boat.Owner.Value) == ownerName then
+			local seat = boat:FindFirstChild("VehicleSeat")
+			local humanoid = boat:FindFirstChild("Humanoid")
+			if seat and humanoid and humanoid.Value > 0 then
+				local distance = (seat.Position - player.Character.HumanoidRootPart.Position).Magnitude
+				if distance < nearestDistance then
+					nearest = boat
+					nearestDistance = distance
+				end
+			end
+		end
+	end
+	return nearest
+end
+
 function BuyBoatAndTeleBoat(P)
-	local Y = checkboat()
+	local Y = CheckSeaEventBoat()
 	if Settings["Auto Sea Event With Friend"] and Settings["Auto Sea Event"] then
 		toTarget(game:GetService("Players")[Settings["Select Friend"]].Character.HumanoidRootPart.CFrame)
 		return
@@ -12331,7 +12069,7 @@ function BuyBoatAndTeleBoat(P)
 	if not Settings["Auto Sea Event"] and not P then
 		return
 	end
-	if not Y or Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 4000 then
+	if not Y or (Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 2500) then
 		local H = CFrame.new(-13.488054275512695, 10.311711311340332, 2927.692)
 		H = if game.PlaceId == getgenv().CheckPlaceId
 			then (CFrame.new(-16204.0810546875, 9.0863618850708, 479.2259521484375))
@@ -12918,6 +12656,7 @@ ToggleFindMirage = FarmingSeaEventSection.CreateToggle(
 		SaveSettings("Auto Find Mirage", y)
 	end
 )
+KitsuneEventMain = Main.CreatePage({ Page_Name = "Kitsune Event", Page_Title = "Kitsune Event" })
 KitsuneEventSection = KitsuneEventMain.CreateSection("Kitsune Event")
 KitsuneEventSection.CreateToggle(
 	{ Title = "Teleport To Kitsune Island", Desc = nil, Default = Settings["Teleport To Kitsune Island"] or false },
@@ -13120,6 +12859,37 @@ end)
 LeviathanEventSection.CreateButton({ Title = "Teleport your boat to current Position" }, function()
 	checkboat().VehicleSeat.CFrame = t.Character.HumanoidRootPart.CFrame
 end)
+-- Paga o Spy com os Fragmentos usando o fluxo de InfoLeviathan já presente na source.
+-- Para quando o status indicar que o Leviathan já pode ser encontrado.
+function AutoPaySpy()
+	if game.PlaceId ~= getgenv().CheckPlaceId then
+		return
+	end
+	while Settings["Auto Pay Spy"] do
+		local ok, status = pcall(StatusCheckLeviathan)
+		if not ok or status == "You can find leviathan now" then
+			return
+		end
+		if status == "Buy Find leviathan" then
+			pcall(function()
+				game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("InfoLeviathan", "1")
+				game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("InfoLeviathan", "2")
+			end)
+		end
+		task.wait(1)
+	end
+end
+LeviathanEventSection.CreateToggle(
+	{ Title = "Auto Pay Spy", Desc = "Paga o Spy com Fragmentos até o Leviathan estar à solta", Default = Settings["Auto Pay Spy"] or false },
+	function(y)
+		SaveSettings("Auto Pay Spy", y)
+		if y then
+			task.spawn(function()
+				pcall(AutoPaySpy)
+			end)
+		end
+	end
+)
 LeviathanEventSection.CreateToggle(
 	{ Title = "Auto Buy Boat Beast Hunter", Desc = nil, Default = Settings["Auto Buy Boat Beast Hunter"] or false },
 	function(y)
@@ -13144,7 +12914,7 @@ function AutoBuyBoatBeastHunter()
 	local BoatShop = CFrame.new(-16204.0810546875, 9.0863618850708, 479.2259521484375)
 	if game.PlaceId ~= getgenv().CheckPlaceId then BoatShop = CFrame.new(-13.488054275512695, 10.311711311340332, 2927.692) end
 	if (BoatShop.Position - Root.Position).Magnitude > 8 then
-		if Settings["Reset Character Buy Boat"] and game.PlaceId == getgenv().CheckPlaceId and (BoatShop.Position - Root.Position).Magnitude > 1000 then
+		if Settings["Reset Character Buy Boat"] and game.PlaceId == getgenv().CheckPlaceId and (BoatShop.Position - Root.Position).Magnitude > 800 then
 			local LastSpawn = game:GetService("Players").LocalPlayer.Data.LastSpawnPoint.Value
 			if (not t:GetAttribute("CurrentLocation") or t:GetAttribute("CurrentLocation") ~= "Tiki Outpost") and (LastSpawn == "Tiki" or LastSpawn == "Tiki2") then
 				Humanoid.Health = 0
@@ -13698,6 +13468,18 @@ function MultiSegmentLeviathan(s, g)
 	end
 end
 getgenv().CFrameLeviathan = CFrame.new(0, 142, 0)
+function RealClickM1()
+	local VIM = game:GetService("VirtualInputManager")
+	if not VIM then
+		return false
+	end
+	pcall(function()
+		VIM:SendMouseButtonEvent(0, 1, 1, true, game, 0)
+		task.wait()
+		VIM:SendMouseButtonEvent(0, 1, 1, false, game, 0)
+	end)
+	return true
+end
 function AutoAttackLeviathan()
 	local s = MultiSegmentLeviathan(game.workspace.SeaBeasts, 2)
 		or (MultiSegmentLeviathan(game.workspace.SeaBeasts, 3))
@@ -13736,8 +13518,9 @@ function AutoAttackLeviathan()
 					end
 				elseif Settings["Use Click M1 Skull Guitar Leviathan"] then
 					equiptool(NameWeapon("Gun"))
-					SpamGunSkullGuitar(v.Hitbox11)
-					if t:DistanceFromCharacter(v.Hitbox11.Position) < 400 then
+					SpamGunSkullGuitar(s.Hitbox11)
+					if t:DistanceFromCharacter(s.Hitbox11.Position) < 400 then
+						RealClickM1()
 						UseSkillGun()
 					end
 				elseif t:DistanceFromCharacter(s.RootPart.Position) < 400 then
@@ -13779,6 +13562,7 @@ function AutoAttackLeviathan()
 				equiptool(NameWeapon("Gun"))
 				SpamGunSkullGuitar(b.Hitbox11)
 				if t:DistanceFromCharacter(b.Hitbox11.Position) < 400 then
+					RealClickM1()
 					UseSkillGun()
 				end
 			elseif t:DistanceFromCharacter(b.Hitbox11.Position) < 400 then
@@ -13941,20 +13725,6 @@ LeviathanEventSection.CreateToggle(
 	end
 )
 LeviathanEventSection.CreateToggle(
-	{ Title = "Auto Fire Shoot Heart Leviathan", Desc = nil, Default = Settings["Auto Fire Shoot Heart Leviathan"] or false },
-	function(value)
-		if value then
-			task.spawn(function()
-				while Settings["Auto Fire Shoot Heart Leviathan"] and task.wait(0.1) do
-					pcall(AutoFireLeviathanHeart)
-				end
-			end)
-		end
-		SaveSettings("Auto Fire Shoot Heart Leviathan", value)
-	end
-)
-
-LeviathanEventSection.CreateToggle(
 	{ Title = "Use Click M1 Fruit Leviathan", Desc = nil, Default = Settings["Use Click M1 Fruit Leviathan"] or false },
 	function(b)
 		SaveSettings("Use Click M1 Fruit Leviathan", b)
@@ -14048,25 +13818,6 @@ function ShootHeartLeviathan()
 		end
 	end
 end
-LeviathanEventSection.CreateToggle(
-	{
-		Title = "Auto Fire Shoot Heart Leviathan",
-		Desc = nil,
-		Default = Settings["Auto Fire Shoot Heart Leviathan"] or false,
-	},
-	function(b)
-		if b then
-			spawn(function()
-				while Settings["Auto Fire Shoot Heart Leviathan"] and (task.wait(0.1)) do
-					local s, s = pcall(function()
-						ShootHeartLeviathan()
-					end)
-				end
-			end)
-		end
-		SaveSettings("Auto Fire Shoot Heart Leviathan", b)
-	end
-)
 LeviathanEventSection.CreateToggle(
 	{ Title = "Teleport Frozen Dimension", Desc = nil, Default = Settings["Teleport Frozen Dimension"] or false },
 	function(b)
@@ -14500,7 +14251,8 @@ BoatSettingSection.CreateToggle(
 		SaveSettings("Change Speed Boat", b)
 	end
 )
-RaceMain = Main.CreatePage({ Page_Name = "Auto Kill Player In Trial", Page_Title = "Auto Kill Player In Trial" })
+RaceMain = Main.CreatePage({ Page_Name = "Upgrade Race", Page_Title = "Upgrade Race" })
+RaceDracoMain = Main.CreatePage({ Page_Name = "Race Draco", Page_Title = "Race Draco" })
 RaceDracoSection = RaceDracoMain.CreateSection("Race Draco")
 function DetectGearUp(b)
 	local s = require(game:GetService("Players").LocalPlayer.PlayerGui.TempleGui.LocalScriptTemple.Buttons)
@@ -15116,7 +14868,7 @@ function FullyDraco()
 			if not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland") then
 				getgenv().RespawnVolcano = true
 				getgenv().turnoffnoclipBoatt = true
-				if not CheckItemInventory("Volcanic Magnet") and not Settings["Ignore Craft Volcanic Magnet Draco"] then
+				if not CheckItemInventory("Volcanic Magnet") then
 					if getgenv().dacoMagnet then
 						local g = tick()
 						repeat
@@ -15600,16 +15352,6 @@ RaceDracoSection.CreateToggle(
 	end
 )
 RaceDracoSection.CreateToggle(
-	{
-		Title = "Ignore Craft Volcanic Magnet Draco",
-		Desc = nil,
-		Default = Settings["Ignore Craft Volcanic Magnet Draco"] or false,
-	},
-	function(g)
-		SaveSettings("Ignore Craft Volcanic Magnet Draco", g)
-	end
-)
-RaceDracoSection.CreateToggle(
 	{ Title = "Auto Buy Gear Draco", Desc = nil, Default = Settings["Auto Buy Gear Draco"] or false },
 	function(g)
 		if g then
@@ -15687,7 +15429,7 @@ RaceDracoSection.CreateToggle(
 		SaveSettings("Auto Finish Train Draco Quest", g)
 	end
 )
-RaceNormalSection = RaceNormalMain.CreateSection("Race Normal")
+RaceNormalSection = RaceMain.CreateSection("Race Normal")
 function AutoMinkV2()
 	local g = GetNearestChest()
 	if g then
@@ -16411,6 +16153,7 @@ RaceNormalSection.CreateToggle(
 		SaveSettings("Auto Get Ghoul", g)
 	end
 )
+RaceV4Main = Main.CreatePage({ Page_Name = "Race V4", Page_Title = "Race V4" })
 RaceV4Section = RaceV4Main.CreateSection("Race V4")
 RaceV4Section.CreateToggle({ Title = "No Frog", Desc = nil, Default = Settings["No Frog"] or false }, function(g)
 	if g then
@@ -19451,6 +19194,9 @@ SettingsVolcanoSection.CreateDropdown(
 )
 FarmingVolcanoSection = VolcanoTab.CreateSection("Farming Volcano")
 function AutoCraftinMagnetVol()
+	if Settings["Ignore Craft Volcanic Magnet"] then
+		return
+	end
 	if not CheckItemInventory("Volcanic Magnet") then
 		if not CheckCountItem("Scrap Metal", 10) then
 			local g = { "Jungle Pirate" }
@@ -20873,27 +20619,51 @@ require(game:GetService("ReplicatedStorage").Modules.CombatUtil).GetTargetPositi
 end
 MISCPVPSection = PvpTab.CreateSection("MISC PVP")
 MISCPVPSection.CreateSlider(
-	{ Title = "Input WalkSpeed", Min = 0, Max = 500, Default = Settings["Input WalkSpeed"] or 200, Precise = true },
+	{ Title = "Input WalkSpeed", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input WalkSpeed"]) or 200, 220), Precise = true },
 	function(b)
-		SaveSettings("Input WalkSpeed", b)
+		SaveSettings("Input WalkSpeed", math.clamp(tonumber(b) or 0, 0, 220))
 	end
 )
 MISCPVPSection.CreateSlider(
-	{ Title = "Input JumpPower", Min = 0, Max = 500, Default = Settings["Input JumpPower"] or 200, Precise = true },
+	{ Title = "Input JumpPower", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input JumpPower"]) or 200, 220), Precise = true },
 	function(b)
-		SaveSettings("Input JumpPower", b)
+		SaveSettings("Input JumpPower", math.clamp(tonumber(b) or 0, 0, 220))
 	end
 )
 MISCPVPSection.CreateToggle(
 	{ Title = "Change JumpPower", Desc = nil, Default = Settings["Change JumpPower"] or false },
 	function(b)
 		SaveSettings("Change JumpPower", b)
+		pcall(function()
+			local Character = t.Character
+			local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+			if Humanoid then
+				Humanoid.UseJumpPower = true
+				if b then
+					Humanoid.JumpPower = math.clamp(tonumber(Settings["Input JumpPower"]) or 50, 0, 220)
+				else
+					Humanoid.JumpPower = 50
+				end
+			end
+		end)
 	end
 )
 MISCPVPSection.CreateToggle(
 	{ Title = "Change WalkSpeed", Desc = nil, Default = Settings["Change WalkSpeed"] or false },
 	function(b)
 		SaveSettings("Change WalkSpeed", b)
+		pcall(function()
+			local Character = t.Character
+			local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+			if Humanoid then
+				local speed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
+				if b then
+					Humanoid.WalkSpeed = speed
+				else
+					Humanoid.WalkSpeed = 16
+				end
+			end
+		end)
 	end
 )
 MISCPVPSection.CreateToggle(
@@ -20939,7 +20709,7 @@ MISCPVPSection.CreateToggle(
 	end
 )
 TabWebhook = Main.CreatePage({ Page_Name = "Tab Webhook", Page_Title = "Tab Webhook" })
-SectionWebhook = TabWebhook.CreateSection("Webhook")
+SectionWebhook = TabWebhook.CreateSection("Tab Webhook")
 SectionWebhook.CreateBox(
 	{
 		Title = "Input Url Webhook",
@@ -21693,23 +21463,49 @@ if not getgenv().BananaCatMainLoop then
 					TweenManager.CancelCurrent()
 				end
 			end
-			if ToggleNoclip() or Settings.Noclip then
-				local T, b, a = next, t.Character:GetDescendants()
-				for s, s in T, b, a do
-					if (s:IsA("MeshPart") or (s:IsA("Part"))) and s.CanCollide then
-						s.CanCollide = false
+			local Character = t.Character
+			if Character and (ToggleNoclip() or Settings.Noclip) then
+				for _, part in ipairs(Character:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.CanCollide = false
 					end
 				end
 			end
 		end)
-		task.spawn(function()
-			if Settings["Change WalkSpeed"] then
-				t.Character.Humanoid.WalkSpeed = Settings["Input WalkSpeed"] or 16
-			end
-			if Settings["Change JumpPower"] then
-				t.Character.Humanoid.JumpPower = Settings["Input JumpPower"] or 50
-			end
-		end)
+		local function ApplyMovementSettings()
+	local Character = t.Character
+	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+	if not Humanoid then return end
+
+	pcall(function()
+		if Settings["Change WalkSpeed"] then
+			Humanoid.WalkSpeed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
+		else
+			Humanoid.WalkSpeed = 16
+		end
+
+		Humanoid.UseJumpPower = true
+		if Settings["Change JumpPower"] then
+			Humanoid.JumpPower = math.clamp(tonumber(Settings["Input JumpPower"]) or 50, 0, 220)
+		else
+			Humanoid.JumpPower = 50
+		end
+	end)
+end
+
+ApplyMovementSettings()
+if t.CharacterAdded then
+	t.CharacterAdded:Connect(function()
+		task.wait(0.25)
+		ApplyMovementSettings()
+	end)
+end
+
+task.spawn(function()
+	while task.wait(0.15) do
+		ApplyMovementSettings()
+	end
+end)
 		if tick() - lastFruitTick >= 0.5 then
 			lastFruitTick = tick()
 			local T, T = pcall(function()
@@ -23274,7 +23070,7 @@ local BananaCatV14RecoveryIndex = {
     TargetSHA256 = "4dfc20987d38950df7ad9123b11b65278227eda71ee226682c91d8719524dd32",
     Proto164Instructions = 13807,
     Proto164BasicBlocks = 5499,
-    RequestedTabs = {"Status And Server", "LocalPlayer", "Setting Farm", "Hold and Select Skill", "Farming", "Stack Farming", "Farming Orther", "Fruits and Raid,Dunge", "Sea Event"},
+    RequestedTabs = {"Status And Server", "LocalPlayer", "Setting Farm", "Hold and Select Skill", "Farming", "Stack Farming", "Farming Other", "Fruits and Raid,Dunge", "Sea Event"},
     MissingRequestedTabs = {},
     CheckQuestRecovered = true,
     CheckQuestRecoveredCallSites = 0,
@@ -24328,9 +24124,9 @@ function Auto_Prehistoric_Island_0422()if#workspace.Map.PrehistoricIsland.Core.S
 
 function Kill_Mob_0427(b)return Settings["Kill Mob"]==true and StackFarmOther and(b==nil or b==FarmRuntime.MobHuntSession);end
 
-function Auto_Prehistoric_Island_0438(...)local __args = {...};local b = __args[1];local Z = __args[5];return function()if not Settings["Auto Turn On V4"]then b[1]:SetStage(true);end;if not Settings["Auto Choose Gears"]and getgenv().ToggleAutoChooseGears then getgenv().ToggleAutoChooseGears:SetStage(true);end;if CheckAcientOneDracoStatus()=="Ready For Trial"then if getgenv().WaitingjoinTrial then wait(5);getgenv().WaitingjoinTrial=false;end;if b[2]:DistanceFromCharacter(workspace._WorldOrigin.Locations["Trial of Flames"].Position)<=3000 then if workspace.Map.DracoTrial.TrialDoor.DoorTouch:FindFirstChild("TouchInterest")then getgenv().DoneTrialDraco=true;toTarget(workspace.Map.DracoTrial.TrialDoor.DoorTouch.CFrame);wait(2);return;end;if game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then local Z=CheckModelTrialDraco();local F,c=GetRelicChuaDat(Z);local l,H=GetRelicChuanbiDat(Z);if l then local l=Z["EndRelic"..H:split("RelicModel")[2]];local H=l:FindFirstChildWhichIsA("ProximityPrompt",true);if b[2]:DistanceFromCharacter(l.WorldPivot.Position)>8 then toTarget(l.WorldPivot);else wait(2);fireproximityprompt(H);wait(2);end;elseif F then local F=Z["Relic"..c:split("RelicModel")[2]];local Z=F:FindFirstChildWhichIsA("ProximityPrompt",true);if b[2]:DistanceFromCharacter(F.WorldPivot.Position)>8 then toTarget(F.WorldPivot);else wait(2);fireproximityprompt(Z);wait(2);end;end;else game.ReplicatedStorage.Remotes.DracoTrial:InvokeServer();wait(3);end;else if getgenv().DoneTrialDraco then wait(5);getgenv().DoneTrialDraco=false;return;end;if not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")then getgenv().RespawnVolcano=true;getgenv().turnoffnoclipBoatt=true;if not CheckItemInventory("Volcanic Magnet")and not Settings["Ignore Craft Volcanic Magnet Draco"]then if getgenv().dacoMagnet then local Z=tick();repeat wait();until tick()-Z>=5 or(game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland"));getgenv().dacoMagnet=false;return;end;if not CheckCountItem("Scrap Metal",10)then local Z={"Jungle Pirate","Musketeer Pirate"};local F=DetectMob(Z);if not F then if b[3](Z)=="table"then if#b[4][7][b[4][6]]>=#Z then b[4][7][b[4][6]]={};return;end;local c=DetectPartSpawnMob(DetectNameTablePart(Z));if c then table.insert(b[4][7][b[4][6]],DetectNameTablePart(Z));repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(Z))or not Settings["Fully Trial Draco"];wait(1);end;end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"];end;return;elseif not CheckCountItem("Blaze Ember",15)then local Z=workspace.NPCs:FindFirstChild("Dragon Hunter")or(game:GetService("ReplicatedStorage").NPCs:FindFirstChild("Dragon Hunter"))or NPCManager.getNPCsByName("Dragon Hunter")[1]._modelState._instance;if not getgenv().QuestHunterDragon then if b[2]:DistanceFromCharacter(Z.HumanoidRootPart.Position)>8 then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,4,4));else local Z=game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RF/DragonHunter"):InvokeServer(unpack({[1]={Context="Check"}}));if not Z or Z and not Z.Text then getgenv().QuestHunterDragon=game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RF/DragonHunter"):InvokeServer(unpack({[1]={Context="RequestQuest"}})).Text;else getgenv().QuestHunterDragon=Z.Text;end;end;else local Z=DetectEmberTemplate();if Z then Instance.new("IntValue",Z).Name="Ignored";repeat wait();toTarget(Z.Part.CFrame);until not Z or not Z.Parent;return;end;if string.find(getgenv().QuestHunterDragon,"Hydra Enforcers")then local F=DetectMob("Hydra Enforcer");if not F then local c=DetectPartSpawnMob("Hydra Enforcer",true);if c then Instance.new("IntValue",c).Name="Ignored";repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob("Hydra Enforcer"))or not Settings["Fully Trial Draco"]or Z;wait(1);else DeleteIgnoredMobSpawn();end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"]or Z;end;elseif string.find(getgenv().QuestHunterDragon,"Venomous Assailants")then local F=DetectMob("Venomous Assailant");if not F then local c=DetectPartSpawnMob("Venomous Assailant",true);if c then Instance.new("IntValue",c).Name="Ignored";repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob("Venomous Assailant"))or not Settings["Fully Trial Draco"]or Z;wait(1);else DeleteIgnoredMobSpawn();end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"]or Z;end;elseif string.find(getgenv().QuestHunterDragon,"trees")then local F,c=workspace.CurrentCamera,DetectTree();if c then Instance.new("IntValue",c).Name="Ignored";local l=tick();repeat wait();local H=c.WorldPivot.Position;if b[2]:DistanceFromCharacter(H)<50 then AutoAllSkill();end;if c:FindFirstChild("Meshes/plant1_Icosphere",true)then toTarget(c.WorldPivot);getgenv().AimPos=c.WorldPivot;b[5].Hit=CFrame.new(F.CFrame.Position,H);b[5].Target=c;else local H,M=(c.WorldPivot*CFrame.new(5,-20,0)).Position,(c.WorldPivot*CFrame.new(0,-20,0)).Position;toTarget(CFrame.new(H));getgenv().AimPos=CFrame.new(M);b[5].Hit=CFrame.new(F.CFrame.Position,M);b[5].Target=c;end;until not c or not c.Parent or not Settings["Fully Trial Draco"]or Z or(c:GetAttribute("AlreadyDestroyedClient"))or tick()-l>=15;end;end;end;return;end;if CheckCountItem("Scrap Metal",10)and(CheckCountItem("Blaze Ember",15))then game:GetService("ReplicatedStorage").Modules.Net:FindFirstChild("RF/Craft"):InvokeServer(unpack({[1]="Craft",[2]="Volcanic Magnet",[3]=1,[4]={}}));wait(2);end;else getgenv().dacoMagnet=true;if not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then local Z=checkboat();if not Z or Z and b[2]:DistanceFromCharacter(Z.VehicleSeat.Position)>=4000 then local F=CFrame.new(-16204.0810546875,9.0863618850708,479.2259521484375);if(F.Position-b[2].Character.HumanoidRootPart.Position).Magnitude>8 then if(F.Position-b[2].Character.HumanoidRootPart.Position).Magnitude>1000 then if not b[2]:GetAttribute("CurrentLocation")or b[2]:GetAttribute("CurrentLocation")~="Tiki Outpost"then if game:GetService("Players").LocalPlayer.Data.LastSpawnPoint.Value=="Tiki"or game:GetService("Players").LocalPlayer.Data.LastSpawnPoint.Value=="Tiki2"then b[2].Character.Humanoid.Health=0;return;end;end;end;toTarget(F);else game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("BuyBoat","PirateBrigade");wait(3);end;elseif b[2].Character.Humanoid.Sit then task.spawn(function()NoclipBoat(Z);end);local F=CFrame.new(-118834.515625,Z.WorldPivot.Y,-78.9505844116211)*CFrame.new(0,0,99999999);manageTween(Z.VehicleSeat,F,150,"TweenBoat");else if getgenv().TweenBoat then getgenv().TweenBoat:Pause();getgenv().TweenBoat:Cancel();end;toTarget(Z.VehicleSeat.CFrame);end;end;end;else if getgenv().turnoffnoclipBoatt then getgenv().turnoffnoclipBoatt=false;local Z=checkboat();if Z then TurnOffNoclipBoat(Z);end;end;if getgenv().RespawnVolcano and Settings["Webhook Find Prehistoric Island"]then getgenv().RespawnVolcano=false;WebhookFindVolcano();end;if getgenv().TweenBoat then getgenv().TweenBoat:Pause();getgenv().TweenBoat:Cancel();end;if not b[2]:GetAttribute("CurrentLocation")or b[2]:GetAttribute("CurrentLocation")~="Prehistoric Island"then local Z=DetectNpc("Fossil Expert");if Z then toTarget(Z.HumanoidRootPart.CFrame);return;end;end;if workspace.Map.PrehistoricIsland:FindFirstChild("TrialRock",true).Transparency==1 then getgenv().WaitingjoinTrial=true;toTarget(workspace.Map.PrehistoricIsland.TrialTeleport.CFrame);return;end;if DetectLava()then local Z,F=workspace.Map.PrehistoricIsland:GetDescendants();for c,c in b[6],Z,F do if c.Name=="TouchInterest"and c.Parent.Name~="TrialTeleport"then c:Destroy();end;end;end;if#workspace.Map.PrehistoricIsland.Core.InteriorLava:GetChildren()>0 then DeleteLava();end;if not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then if workspace.Map.PrehistoricIsland.Core:FindFirstChild("ActivationPrompt")and(workspace.Map.PrehistoricIsland.Core.ActivationPrompt:FindFirstChild("ProximityPrompt"))then toTarget(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.CFrame);if b[2]:DistanceFromCharacter(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.Position)<8 then fireproximityprompt(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.ProximityPrompt,1);wait(3);end;return;elseif not workspace.Map.PrehistoricIsland.Core:FindFirstChild("ActivationPrompt")and not workspace.Map.PrehistoricIsland.Core:FindFirstChild("FossilExpertSpawn")then local Z=DetectNpc("Fossil Expert");if Z then toTarget(Z.HumanoidRootPart.CFrame);return;end;end;else if b[7][7][b[7][6]]then local Z=workspace.Map.PrehistoricIsland.Core.PrehistoricRelic.Skull;repeat task.wait();toTarget(Z.CFrame);until b[2]:DistanceFromCharacter(Z.Position)<=200 or(DetectGolem())or(DetectRockVolcano());b[7][7][b[7][6]]=false;return;end;local Z=DetectGolem();if Z then repeat task.wait();toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,20,7));if Settings["Select Method Kill Golem"]=="Instant Kill [ Risk and can bug no die mob ]"then if b[2]:DistanceFromCharacter(Z.HumanoidRootPart.Position)<50 then KillRaidEnemy();end;else equiptool(NameWeapon(Settings["Select Weapon Kill Golem"]or"Melee"));getgenv().ClickM1Volcano(Z);end;if not getgenv().KillMobRaid and Settings["Kill Aura Only Raid And Volcano"]then getgenv().KillMobRaid=true;local F=Settings["Time Delay Kill"]or 5;Z.Humanoid:ChangeState(Enum.HumanoidStateType.Dead);delay(F,function()getgenv().KillMobRaid=false;end);end;until not IsMobAlive(Z)or not Settings["Fully Trial Draco"]or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;end;Z=DetectRockVolcano();if Z then if Settings["Fix Volcano Safe"]then local F=DetectPositionVolcano();local c,c=CheckPosnearRock(F,b[2].Character.HumanoidRootPart);if b[2]:DistanceFromCharacter((CheckPosnearRock(F,Z.WorldPivot)))>=400 then b[8][7][b[8][6]]=c+1;if c>=7 then b[8][7][b[8][6]]=1;end;local c=F[b[8][7][b[8][6]]];toTarget(CFrame.new(c));else local F=b[9][math.floor(Z.WorldPivot.Position.Y)];repeat task.wait();if b[2]:DistanceFromCharacter((Z.WorldPivot*F).Position)>8 then toTarget(Z.WorldPivot*F);end;if b[2]:DistanceFromCharacter(Z.WorldPivot.Position)<100 then AutoUseSkillFixLava();end;getgenv().AimPos=Z.WorldPivot;local c=workspace.CurrentCamera;b[5].Hit=Z.WorldPivot;b[5].Target=Z;until not Z or not Z.Parent or not Settings["Fully Trial Draco"]or not Z.VFXLayer.Specs.Enabled or(DetectGolem())or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;F=DetectGolem();if not F then b[7][7][b[7][6]]=true;end;wait(1);end;else local F=b[9][math.floor(Z.WorldPivot.Position.Y)];repeat task.wait();if b[2]:DistanceFromCharacter((Z.WorldPivot*F).Position)>8 then toTarget(Z.WorldPivot*F);end;if b[2]:DistanceFromCharacter(Z.WorldPivot.Position)<100 then AutoUseSkillFixLava();end;getgenv().AimPos=Z.WorldPivot;local c=workspace.CurrentCamera;b[5].Hit=Z.WorldPivot;b[5].Target=Z;until not Z or not Z.Parent or not Settings["Fully Trial Draco"]or not Z.VFXLayer.Specs.Enabled or(DetectGolem())or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;F=DetectGolem();if not F then b[7][7][b[7][6]]=true;end;end;end;end;end;end;elseif string.find(CheckAcientOneDracoStatus(),"Can Buy Gear")then BuyGearDracoV4();else local Z=DetectMob(b[10]);if Z then repeat task.wait();sizepart(Z);BringMob(Z);UsedualFlock();ClickM1(Z);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(Z)or not Settings["Fully Trial Draco"];elseif b[3](b[10])=="table"then if#b[4][7][b[4][6]]>=#b[10]then b[4][7][b[4][6]]={};return;end;local Z=DetectPartSpawnMob(DetectNameTablePart(b[10]));if Z then table.insert(b[4][7][b[4][6]],DetectNameTablePart(b[10]));repeat wait();toTarget(Z.CFrame*CFrame.new(0,60,0));until(Z.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(b[10]))or not Settings["Fully Trial Draco"];wait(1);end;else local Z=DetectPartSpawnMob(b[10],true);if Z then Instance.new("IntValue",Z).Name="Ignored";repeat wait();toTarget(Z.CFrame*CFrame.new(0,60,0));until(Z.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(b[10]))or not Settings["Fully Trial Draco"];wait(1);else DeleteIgnoredMobSpawn();end;end;end;end;end
+function Auto_Prehistoric_Island_0438(...)local __args = {...};local b = __args[1];local Z = __args[5];return function()if not Settings["Auto Turn On V4"]then b[1]:SetStage(true);end;if not Settings["Auto Choose Gears"]and getgenv().ToggleAutoChooseGears then getgenv().ToggleAutoChooseGears:SetStage(true);end;if CheckAcientOneDracoStatus()=="Ready For Trial"then if getgenv().WaitingjoinTrial then wait(5);getgenv().WaitingjoinTrial=false;end;if b[2]:DistanceFromCharacter(workspace._WorldOrigin.Locations["Trial of Flames"].Position)<=3000 then if workspace.Map.DracoTrial.TrialDoor.DoorTouch:FindFirstChild("TouchInterest")then getgenv().DoneTrialDraco=true;toTarget(workspace.Map.DracoTrial.TrialDoor.DoorTouch.CFrame);wait(2);return;end;if game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then local Z=CheckModelTrialDraco();local F,c=GetRelicChuaDat(Z);local l,H=GetRelicChuanbiDat(Z);if l then local l=Z["EndRelic"..H:split("RelicModel")[2]];local H=l:FindFirstChildWhichIsA("ProximityPrompt",true);if b[2]:DistanceFromCharacter(l.WorldPivot.Position)>8 then toTarget(l.WorldPivot);else wait(2);fireproximityprompt(H);wait(2);end;elseif F then local F=Z["Relic"..c:split("RelicModel")[2]];local Z=F:FindFirstChildWhichIsA("ProximityPrompt",true);if b[2]:DistanceFromCharacter(F.WorldPivot.Position)>8 then toTarget(F.WorldPivot);else wait(2);fireproximityprompt(Z);wait(2);end;end;else game.ReplicatedStorage.Remotes.DracoTrial:InvokeServer();wait(3);end;else if getgenv().DoneTrialDraco then wait(5);getgenv().DoneTrialDraco=false;return;end;if not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")then getgenv().RespawnVolcano=true;getgenv().turnoffnoclipBoatt=true;if not CheckItemInventory("Volcanic Magnet")then if getgenv().dacoMagnet then local Z=tick();repeat wait();until tick()-Z>=5 or(game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland"));getgenv().dacoMagnet=false;return;end;if not CheckCountItem("Scrap Metal",10)then local Z={"Jungle Pirate","Musketeer Pirate"};local F=DetectMob(Z);if not F then if b[3](Z)=="table"then if#b[4][7][b[4][6]]>=#Z then b[4][7][b[4][6]]={};return;end;local c=DetectPartSpawnMob(DetectNameTablePart(Z));if c then table.insert(b[4][7][b[4][6]],DetectNameTablePart(Z));repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(Z))or not Settings["Fully Trial Draco"];wait(1);end;end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"];end;return;elseif not CheckCountItem("Blaze Ember",15)then local Z=workspace.NPCs:FindFirstChild("Dragon Hunter")or(game:GetService("ReplicatedStorage").NPCs:FindFirstChild("Dragon Hunter"))or NPCManager.getNPCsByName("Dragon Hunter")[1]._modelState._instance;if not getgenv().QuestHunterDragon then if b[2]:DistanceFromCharacter(Z.HumanoidRootPart.Position)>8 then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,4,4));else local Z=game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RF/DragonHunter"):InvokeServer(unpack({[1]={Context="Check"}}));if not Z or Z and not Z.Text then getgenv().QuestHunterDragon=game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RF/DragonHunter"):InvokeServer(unpack({[1]={Context="RequestQuest"}})).Text;else getgenv().QuestHunterDragon=Z.Text;end;end;else local Z=DetectEmberTemplate();if Z then Instance.new("IntValue",Z).Name="Ignored";repeat wait();toTarget(Z.Part.CFrame);until not Z or not Z.Parent;return;end;if string.find(getgenv().QuestHunterDragon,"Hydra Enforcers")then local F=DetectMob("Hydra Enforcer");if not F then local c=DetectPartSpawnMob("Hydra Enforcer",true);if c then Instance.new("IntValue",c).Name="Ignored";repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob("Hydra Enforcer"))or not Settings["Fully Trial Draco"]or Z;wait(1);else DeleteIgnoredMobSpawn();end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"]or Z;end;elseif string.find(getgenv().QuestHunterDragon,"Venomous Assailants")then local F=DetectMob("Venomous Assailant");if not F then local c=DetectPartSpawnMob("Venomous Assailant",true);if c then Instance.new("IntValue",c).Name="Ignored";repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob("Venomous Assailant"))or not Settings["Fully Trial Draco"]or Z;wait(1);else DeleteIgnoredMobSpawn();end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"]or Z;end;elseif string.find(getgenv().QuestHunterDragon,"trees")then local F,c=workspace.CurrentCamera,DetectTree();if c then Instance.new("IntValue",c).Name="Ignored";local l=tick();repeat wait();local H=c.WorldPivot.Position;if b[2]:DistanceFromCharacter(H)<50 then AutoAllSkill();end;if c:FindFirstChild("Meshes/plant1_Icosphere",true)then toTarget(c.WorldPivot);getgenv().AimPos=c.WorldPivot;b[5].Hit=CFrame.new(F.CFrame.Position,H);b[5].Target=c;else local H,M=(c.WorldPivot*CFrame.new(5,-20,0)).Position,(c.WorldPivot*CFrame.new(0,-20,0)).Position;toTarget(CFrame.new(H));getgenv().AimPos=CFrame.new(M);b[5].Hit=CFrame.new(F.CFrame.Position,M);b[5].Target=c;end;until not c or not c.Parent or not Settings["Fully Trial Draco"]or Z or(c:GetAttribute("AlreadyDestroyedClient"))or tick()-l>=15;end;end;end;return;end;if CheckCountItem("Scrap Metal",10)and(CheckCountItem("Blaze Ember",15))then game:GetService("ReplicatedStorage").Modules.Net:FindFirstChild("RF/Craft"):InvokeServer(unpack({[1]="Craft",[2]="Volcanic Magnet",[3]=1,[4]={}}));wait(2);end;else getgenv().dacoMagnet=true;if not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then local Z=checkboat();if not Z or Z and b[2]:DistanceFromCharacter(Z.VehicleSeat.Position)>=4000 then local F=CFrame.new(-16204.0810546875,9.0863618850708,479.2259521484375);if(F.Position-b[2].Character.HumanoidRootPart.Position).Magnitude>8 then if(F.Position-b[2].Character.HumanoidRootPart.Position).Magnitude>1000 then if not b[2]:GetAttribute("CurrentLocation")or b[2]:GetAttribute("CurrentLocation")~="Tiki Outpost"then if game:GetService("Players").LocalPlayer.Data.LastSpawnPoint.Value=="Tiki"or game:GetService("Players").LocalPlayer.Data.LastSpawnPoint.Value=="Tiki2"then b[2].Character.Humanoid.Health=0;return;end;end;end;toTarget(F);else game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("BuyBoat","PirateBrigade");wait(3);end;elseif b[2].Character.Humanoid.Sit then task.spawn(function()NoclipBoat(Z);end);local F=CFrame.new(-118834.515625,Z.WorldPivot.Y,-78.9505844116211)*CFrame.new(0,0,99999999);manageTween(Z.VehicleSeat,F,150,"TweenBoat");else if getgenv().TweenBoat then getgenv().TweenBoat:Pause();getgenv().TweenBoat:Cancel();end;toTarget(Z.VehicleSeat.CFrame);end;end;end;else if getgenv().turnoffnoclipBoatt then getgenv().turnoffnoclipBoatt=false;local Z=checkboat();if Z then TurnOffNoclipBoat(Z);end;end;if getgenv().RespawnVolcano and Settings["Webhook Find Prehistoric Island"]then getgenv().RespawnVolcano=false;WebhookFindVolcano();end;if getgenv().TweenBoat then getgenv().TweenBoat:Pause();getgenv().TweenBoat:Cancel();end;if not b[2]:GetAttribute("CurrentLocation")or b[2]:GetAttribute("CurrentLocation")~="Prehistoric Island"then local Z=DetectNpc("Fossil Expert");if Z then toTarget(Z.HumanoidRootPart.CFrame);return;end;end;if workspace.Map.PrehistoricIsland:FindFirstChild("TrialRock",true).Transparency==1 then getgenv().WaitingjoinTrial=true;toTarget(workspace.Map.PrehistoricIsland.TrialTeleport.CFrame);return;end;if DetectLava()then local Z,F=workspace.Map.PrehistoricIsland:GetDescendants();for c,c in b[6],Z,F do if c.Name=="TouchInterest"and c.Parent.Name~="TrialTeleport"then c:Destroy();end;end;end;if#workspace.Map.PrehistoricIsland.Core.InteriorLava:GetChildren()>0 then DeleteLava();end;if not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then if workspace.Map.PrehistoricIsland.Core:FindFirstChild("ActivationPrompt")and(workspace.Map.PrehistoricIsland.Core.ActivationPrompt:FindFirstChild("ProximityPrompt"))then toTarget(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.CFrame);if b[2]:DistanceFromCharacter(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.Position)<8 then fireproximityprompt(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.ProximityPrompt,1);wait(3);end;return;elseif not workspace.Map.PrehistoricIsland.Core:FindFirstChild("ActivationPrompt")and not workspace.Map.PrehistoricIsland.Core:FindFirstChild("FossilExpertSpawn")then local Z=DetectNpc("Fossil Expert");if Z then toTarget(Z.HumanoidRootPart.CFrame);return;end;end;else if b[7][7][b[7][6]]then local Z=workspace.Map.PrehistoricIsland.Core.PrehistoricRelic.Skull;repeat task.wait();toTarget(Z.CFrame);until b[2]:DistanceFromCharacter(Z.Position)<=200 or(DetectGolem())or(DetectRockVolcano());b[7][7][b[7][6]]=false;return;end;local Z=DetectGolem();if Z then repeat task.wait();toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,20,7));if Settings["Select Method Kill Golem"]=="Instant Kill [ Risk and can bug no die mob ]"then if b[2]:DistanceFromCharacter(Z.HumanoidRootPart.Position)<50 then KillRaidEnemy();end;else equiptool(NameWeapon(Settings["Select Weapon Kill Golem"]or"Melee"));getgenv().ClickM1Volcano(Z);end;if not getgenv().KillMobRaid and Settings["Kill Aura Only Raid And Volcano"]then getgenv().KillMobRaid=true;local F=Settings["Time Delay Kill"]or 5;Z.Humanoid:ChangeState(Enum.HumanoidStateType.Dead);delay(F,function()getgenv().KillMobRaid=false;end);end;until not IsMobAlive(Z)or not Settings["Fully Trial Draco"]or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;end;Z=DetectRockVolcano();if Z then if Settings["Fix Volcano Safe"]then local F=DetectPositionVolcano();local c,c=CheckPosnearRock(F,b[2].Character.HumanoidRootPart);if b[2]:DistanceFromCharacter((CheckPosnearRock(F,Z.WorldPivot)))>=400 then b[8][7][b[8][6]]=c+1;if c>=7 then b[8][7][b[8][6]]=1;end;local c=F[b[8][7][b[8][6]]];toTarget(CFrame.new(c));else local F=b[9][math.floor(Z.WorldPivot.Position.Y)];repeat task.wait();if b[2]:DistanceFromCharacter((Z.WorldPivot*F).Position)>8 then toTarget(Z.WorldPivot*F);end;if b[2]:DistanceFromCharacter(Z.WorldPivot.Position)<100 then AutoUseSkillFixLava();end;getgenv().AimPos=Z.WorldPivot;local c=workspace.CurrentCamera;b[5].Hit=Z.WorldPivot;b[5].Target=Z;until not Z or not Z.Parent or not Settings["Fully Trial Draco"]or not Z.VFXLayer.Specs.Enabled or(DetectGolem())or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;F=DetectGolem();if not F then b[7][7][b[7][6]]=true;end;wait(1);end;else local F=b[9][math.floor(Z.WorldPivot.Position.Y)];repeat task.wait();if b[2]:DistanceFromCharacter((Z.WorldPivot*F).Position)>8 then toTarget(Z.WorldPivot*F);end;if b[2]:DistanceFromCharacter(Z.WorldPivot.Position)<100 then AutoUseSkillFixLava();end;getgenv().AimPos=Z.WorldPivot;local c=workspace.CurrentCamera;b[5].Hit=Z.WorldPivot;b[5].Target=Z;until not Z or not Z.Parent or not Settings["Fully Trial Draco"]or not Z.VFXLayer.Specs.Enabled or(DetectGolem())or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;F=DetectGolem();if not F then b[7][7][b[7][6]]=true;end;end;end;end;end;end;elseif string.find(CheckAcientOneDracoStatus(),"Can Buy Gear")then BuyGearDracoV4();else local Z=DetectMob(b[10]);if Z then repeat task.wait();sizepart(Z);BringMob(Z);UsedualFlock();ClickM1(Z);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(Z)or not Settings["Fully Trial Draco"];elseif b[3](b[10])=="table"then if#b[4][7][b[4][6]]>=#b[10]then b[4][7][b[4][6]]={};return;end;local Z=DetectPartSpawnMob(DetectNameTablePart(b[10]));if Z then table.insert(b[4][7][b[4][6]],DetectNameTablePart(b[10]));repeat wait();toTarget(Z.CFrame*CFrame.new(0,60,0));until(Z.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(b[10]))or not Settings["Fully Trial Draco"];wait(1);end;else local Z=DetectPartSpawnMob(b[10],true);if Z then Instance.new("IntValue",Z).Name="Ignored";repeat wait();toTarget(Z.CFrame*CFrame.new(0,60,0));until(Z.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(b[10]))or not Settings["Fully Trial Draco"];wait(1);else DeleteIgnoredMobSpawn();end;end;end;end;end
 
-function Auto_Prehistoric_Island_0439()if not Settings["Auto Turn On V4"]then b[1]:SetStage(true);end;if not Settings["Auto Choose Gears"]and getgenv().ToggleAutoChooseGears then getgenv().ToggleAutoChooseGears:SetStage(true);end;if CheckAcientOneDracoStatus()=="Ready For Trial"then if getgenv().WaitingjoinTrial then wait(5);getgenv().WaitingjoinTrial=false;end;if b[2]:DistanceFromCharacter(workspace._WorldOrigin.Locations["Trial of Flames"].Position)<=3000 then if workspace.Map.DracoTrial.TrialDoor.DoorTouch:FindFirstChild("TouchInterest")then getgenv().DoneTrialDraco=true;toTarget(workspace.Map.DracoTrial.TrialDoor.DoorTouch.CFrame);wait(2);return;end;if game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then local Z=CheckModelTrialDraco();local F,c=GetRelicChuaDat(Z);local l,H=GetRelicChuanbiDat(Z);if l then local l=Z["EndRelic"..H:split("RelicModel")[2]];local H=l:FindFirstChildWhichIsA("ProximityPrompt",true);if b[2]:DistanceFromCharacter(l.WorldPivot.Position)>8 then toTarget(l.WorldPivot);else wait(2);fireproximityprompt(H);wait(2);end;elseif F then local F=Z["Relic"..c:split("RelicModel")[2]];local Z=F:FindFirstChildWhichIsA("ProximityPrompt",true);if b[2]:DistanceFromCharacter(F.WorldPivot.Position)>8 then toTarget(F.WorldPivot);else wait(2);fireproximityprompt(Z);wait(2);end;end;else game.ReplicatedStorage.Remotes.DracoTrial:InvokeServer();wait(3);end;else if getgenv().DoneTrialDraco then wait(5);getgenv().DoneTrialDraco=false;return;end;if not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")then getgenv().RespawnVolcano=true;getgenv().turnoffnoclipBoatt=true;if not CheckItemInventory("Volcanic Magnet")and not Settings["Ignore Craft Volcanic Magnet Draco"]then if getgenv().dacoMagnet then local Z=tick();repeat wait();until tick()-Z>=5 or(game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland"));getgenv().dacoMagnet=false;return;end;if not CheckCountItem("Scrap Metal",10)then local Z={"Jungle Pirate","Musketeer Pirate"};local F=DetectMob(Z);if not F then if b[3](Z)=="table"then if#b[4][7][b[4][6]]>=#Z then b[4][7][b[4][6]]={};return;end;local c=DetectPartSpawnMob(DetectNameTablePart(Z));if c then table.insert(b[4][7][b[4][6]],DetectNameTablePart(Z));repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(Z))or not Settings["Fully Trial Draco"];wait(1);end;end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"];end;return;elseif not CheckCountItem("Blaze Ember",15)then local Z=workspace.NPCs:FindFirstChild("Dragon Hunter")or(game:GetService("ReplicatedStorage").NPCs:FindFirstChild("Dragon Hunter"))or NPCManager.getNPCsByName("Dragon Hunter")[1]._modelState._instance;if not getgenv().QuestHunterDragon then if b[2]:DistanceFromCharacter(Z.HumanoidRootPart.Position)>8 then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,4,4));else local Z=game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RF/DragonHunter"):InvokeServer(unpack({[1]={Context="Check"}}));if not Z or Z and not Z.Text then getgenv().QuestHunterDragon=game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RF/DragonHunter"):InvokeServer(unpack({[1]={Context="RequestQuest"}})).Text;else getgenv().QuestHunterDragon=Z.Text;end;end;else local Z=DetectEmberTemplate();if Z then Instance.new("IntValue",Z).Name="Ignored";repeat wait();toTarget(Z.Part.CFrame);until not Z or not Z.Parent;return;end;if string.find(getgenv().QuestHunterDragon,"Hydra Enforcers")then local F=DetectMob("Hydra Enforcer");if not F then local c=DetectPartSpawnMob("Hydra Enforcer",true);if c then Instance.new("IntValue",c).Name="Ignored";repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob("Hydra Enforcer"))or not Settings["Fully Trial Draco"]or Z;wait(1);else DeleteIgnoredMobSpawn();end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"]or Z;end;elseif string.find(getgenv().QuestHunterDragon,"Venomous Assailants")then local F=DetectMob("Venomous Assailant");if not F then local c=DetectPartSpawnMob("Venomous Assailant",true);if c then Instance.new("IntValue",c).Name="Ignored";repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob("Venomous Assailant"))or not Settings["Fully Trial Draco"]or Z;wait(1);else DeleteIgnoredMobSpawn();end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"]or Z;end;elseif string.find(getgenv().QuestHunterDragon,"trees")then local F,c=workspace.CurrentCamera,DetectTree();if c then Instance.new("IntValue",c).Name="Ignored";local l=tick();repeat wait();local H=c.WorldPivot.Position;if b[2]:DistanceFromCharacter(H)<50 then AutoAllSkill();end;if c:FindFirstChild("Meshes/plant1_Icosphere",true)then toTarget(c.WorldPivot);getgenv().AimPos=c.WorldPivot;b[5].Hit=CFrame.new(F.CFrame.Position,H);b[5].Target=c;else local H,M=(c.WorldPivot*CFrame.new(5,-20,0)).Position,(c.WorldPivot*CFrame.new(0,-20,0)).Position;toTarget(CFrame.new(H));getgenv().AimPos=CFrame.new(M);b[5].Hit=CFrame.new(F.CFrame.Position,M);b[5].Target=c;end;until not c or not c.Parent or not Settings["Fully Trial Draco"]or Z or(c:GetAttribute("AlreadyDestroyedClient"))or tick()-l>=15;end;end;end;return;end;if CheckCountItem("Scrap Metal",10)and(CheckCountItem("Blaze Ember",15))then game:GetService("ReplicatedStorage").Modules.Net:FindFirstChild("RF/Craft"):InvokeServer(unpack({[1]="Craft",[2]="Volcanic Magnet",[3]=1,[4]={}}));wait(2);end;else getgenv().dacoMagnet=true;if not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then local Z=checkboat();if not Z or Z and b[2]:DistanceFromCharacter(Z.VehicleSeat.Position)>=4000 then local F=CFrame.new(-16204.0810546875,9.0863618850708,479.2259521484375);if(F.Position-b[2].Character.HumanoidRootPart.Position).Magnitude>8 then if(F.Position-b[2].Character.HumanoidRootPart.Position).Magnitude>1000 then if not b[2]:GetAttribute("CurrentLocation")or b[2]:GetAttribute("CurrentLocation")~="Tiki Outpost"then if game:GetService("Players").LocalPlayer.Data.LastSpawnPoint.Value=="Tiki"or game:GetService("Players").LocalPlayer.Data.LastSpawnPoint.Value=="Tiki2"then b[2].Character.Humanoid.Health=0;return;end;end;end;toTarget(F);else game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("BuyBoat","PirateBrigade");wait(3);end;elseif b[2].Character.Humanoid.Sit then task.spawn(function()NoclipBoat(Z);end);local F=CFrame.new(-118834.515625,Z.WorldPivot.Y,-78.9505844116211)*CFrame.new(0,0,99999999);manageTween(Z.VehicleSeat,F,150,"TweenBoat");else if getgenv().TweenBoat then getgenv().TweenBoat:Pause();getgenv().TweenBoat:Cancel();end;toTarget(Z.VehicleSeat.CFrame);end;end;end;else if getgenv().turnoffnoclipBoatt then getgenv().turnoffnoclipBoatt=false;local Z=checkboat();if Z then TurnOffNoclipBoat(Z);end;end;if getgenv().RespawnVolcano and Settings["Webhook Find Prehistoric Island"]then getgenv().RespawnVolcano=false;WebhookFindVolcano();end;if getgenv().TweenBoat then getgenv().TweenBoat:Pause();getgenv().TweenBoat:Cancel();end;if not b[2]:GetAttribute("CurrentLocation")or b[2]:GetAttribute("CurrentLocation")~="Prehistoric Island"then local Z=DetectNpc("Fossil Expert");if Z then toTarget(Z.HumanoidRootPart.CFrame);return;end;end;if workspace.Map.PrehistoricIsland:FindFirstChild("TrialRock",true).Transparency==1 then getgenv().WaitingjoinTrial=true;toTarget(workspace.Map.PrehistoricIsland.TrialTeleport.CFrame);return;end;if DetectLava()then local Z,F=workspace.Map.PrehistoricIsland:GetDescendants();for c,c in b[6],Z,F do if c.Name=="TouchInterest"and c.Parent.Name~="TrialTeleport"then c:Destroy();end;end;end;if#workspace.Map.PrehistoricIsland.Core.InteriorLava:GetChildren()>0 then DeleteLava();end;if not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then if workspace.Map.PrehistoricIsland.Core:FindFirstChild("ActivationPrompt")and(workspace.Map.PrehistoricIsland.Core.ActivationPrompt:FindFirstChild("ProximityPrompt"))then toTarget(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.CFrame);if b[2]:DistanceFromCharacter(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.Position)<8 then fireproximityprompt(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.ProximityPrompt,1);wait(3);end;return;elseif not workspace.Map.PrehistoricIsland.Core:FindFirstChild("ActivationPrompt")and not workspace.Map.PrehistoricIsland.Core:FindFirstChild("FossilExpertSpawn")then local Z=DetectNpc("Fossil Expert");if Z then toTarget(Z.HumanoidRootPart.CFrame);return;end;end;else if b[7][7][b[7][6]]then local Z=workspace.Map.PrehistoricIsland.Core.PrehistoricRelic.Skull;repeat task.wait();toTarget(Z.CFrame);until b[2]:DistanceFromCharacter(Z.Position)<=200 or(DetectGolem())or(DetectRockVolcano());b[7][7][b[7][6]]=false;return;end;local Z=DetectGolem();if Z then repeat task.wait();toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,20,7));if Settings["Select Method Kill Golem"]=="Instant Kill [ Risk and can bug no die mob ]"then if b[2]:DistanceFromCharacter(Z.HumanoidRootPart.Position)<50 then KillRaidEnemy();end;else equiptool(NameWeapon(Settings["Select Weapon Kill Golem"]or"Melee"));getgenv().ClickM1Volcano(Z);end;if not getgenv().KillMobRaid and Settings["Kill Aura Only Raid And Volcano"]then getgenv().KillMobRaid=true;local F=Settings["Time Delay Kill"]or 5;Z.Humanoid:ChangeState(Enum.HumanoidStateType.Dead);delay(F,function()getgenv().KillMobRaid=false;end);end;until not IsMobAlive(Z)or not Settings["Fully Trial Draco"]or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;end;Z=DetectRockVolcano();if Z then if Settings["Fix Volcano Safe"]then local F=DetectPositionVolcano();local c,c=CheckPosnearRock(F,b[2].Character.HumanoidRootPart);if b[2]:DistanceFromCharacter((CheckPosnearRock(F,Z.WorldPivot)))>=400 then b[8][7][b[8][6]]=c+1;if c>=7 then b[8][7][b[8][6]]=1;end;local c=F[b[8][7][b[8][6]]];toTarget(CFrame.new(c));else local F=b[9][math.floor(Z.WorldPivot.Position.Y)];repeat task.wait();if b[2]:DistanceFromCharacter((Z.WorldPivot*F).Position)>8 then toTarget(Z.WorldPivot*F);end;if b[2]:DistanceFromCharacter(Z.WorldPivot.Position)<100 then AutoUseSkillFixLava();end;getgenv().AimPos=Z.WorldPivot;local c=workspace.CurrentCamera;b[5].Hit=Z.WorldPivot;b[5].Target=Z;until not Z or not Z.Parent or not Settings["Fully Trial Draco"]or not Z.VFXLayer.Specs.Enabled or(DetectGolem())or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;F=DetectGolem();if not F then b[7][7][b[7][6]]=true;end;wait(1);end;else local F=b[9][math.floor(Z.WorldPivot.Position.Y)];repeat task.wait();if b[2]:DistanceFromCharacter((Z.WorldPivot*F).Position)>8 then toTarget(Z.WorldPivot*F);end;if b[2]:DistanceFromCharacter(Z.WorldPivot.Position)<100 then AutoUseSkillFixLava();end;getgenv().AimPos=Z.WorldPivot;local c=workspace.CurrentCamera;b[5].Hit=Z.WorldPivot;b[5].Target=Z;until not Z or not Z.Parent or not Settings["Fully Trial Draco"]or not Z.VFXLayer.Specs.Enabled or(DetectGolem())or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;F=DetectGolem();if not F then b[7][7][b[7][6]]=true;end;end;end;end;end;end;elseif string.find(CheckAcientOneDracoStatus(),"Can Buy Gear")then BuyGearDracoV4();else local Z=DetectMob(b[10]);if Z then repeat task.wait();sizepart(Z);BringMob(Z);UsedualFlock();ClickM1(Z);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(Z)or not Settings["Fully Trial Draco"];elseif b[3](b[10])=="table"then if#b[4][7][b[4][6]]>=#b[10]then b[4][7][b[4][6]]={};return;end;local Z=DetectPartSpawnMob(DetectNameTablePart(b[10]));if Z then table.insert(b[4][7][b[4][6]],DetectNameTablePart(b[10]));repeat wait();toTarget(Z.CFrame*CFrame.new(0,60,0));until(Z.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(b[10]))or not Settings["Fully Trial Draco"];wait(1);end;else local Z=DetectPartSpawnMob(b[10],true);if Z then Instance.new("IntValue",Z).Name="Ignored";repeat wait();toTarget(Z.CFrame*CFrame.new(0,60,0));until(Z.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(b[10]))or not Settings["Fully Trial Draco"];wait(1);else DeleteIgnoredMobSpawn();end;end;end;end
+function Auto_Prehistoric_Island_0439()if not Settings["Auto Turn On V4"]then b[1]:SetStage(true);end;if not Settings["Auto Choose Gears"]and getgenv().ToggleAutoChooseGears then getgenv().ToggleAutoChooseGears:SetStage(true);end;if CheckAcientOneDracoStatus()=="Ready For Trial"then if getgenv().WaitingjoinTrial then wait(5);getgenv().WaitingjoinTrial=false;end;if b[2]:DistanceFromCharacter(workspace._WorldOrigin.Locations["Trial of Flames"].Position)<=3000 then if workspace.Map.DracoTrial.TrialDoor.DoorTouch:FindFirstChild("TouchInterest")then getgenv().DoneTrialDraco=true;toTarget(workspace.Map.DracoTrial.TrialDoor.DoorTouch.CFrame);wait(2);return;end;if game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then local Z=CheckModelTrialDraco();local F,c=GetRelicChuaDat(Z);local l,H=GetRelicChuanbiDat(Z);if l then local l=Z["EndRelic"..H:split("RelicModel")[2]];local H=l:FindFirstChildWhichIsA("ProximityPrompt",true);if b[2]:DistanceFromCharacter(l.WorldPivot.Position)>8 then toTarget(l.WorldPivot);else wait(2);fireproximityprompt(H);wait(2);end;elseif F then local F=Z["Relic"..c:split("RelicModel")[2]];local Z=F:FindFirstChildWhichIsA("ProximityPrompt",true);if b[2]:DistanceFromCharacter(F.WorldPivot.Position)>8 then toTarget(F.WorldPivot);else wait(2);fireproximityprompt(Z);wait(2);end;end;else game.ReplicatedStorage.Remotes.DracoTrial:InvokeServer();wait(3);end;else if getgenv().DoneTrialDraco then wait(5);getgenv().DoneTrialDraco=false;return;end;if not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")then getgenv().RespawnVolcano=true;getgenv().turnoffnoclipBoatt=true;if not CheckItemInventory("Volcanic Magnet")then if getgenv().dacoMagnet then local Z=tick();repeat wait();until tick()-Z>=5 or(game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland"));getgenv().dacoMagnet=false;return;end;if not CheckCountItem("Scrap Metal",10)then local Z={"Jungle Pirate","Musketeer Pirate"};local F=DetectMob(Z);if not F then if b[3](Z)=="table"then if#b[4][7][b[4][6]]>=#Z then b[4][7][b[4][6]]={};return;end;local c=DetectPartSpawnMob(DetectNameTablePart(Z));if c then table.insert(b[4][7][b[4][6]],DetectNameTablePart(Z));repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(Z))or not Settings["Fully Trial Draco"];wait(1);end;end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"];end;return;elseif not CheckCountItem("Blaze Ember",15)then local Z=workspace.NPCs:FindFirstChild("Dragon Hunter")or(game:GetService("ReplicatedStorage").NPCs:FindFirstChild("Dragon Hunter"))or NPCManager.getNPCsByName("Dragon Hunter")[1]._modelState._instance;if not getgenv().QuestHunterDragon then if b[2]:DistanceFromCharacter(Z.HumanoidRootPart.Position)>8 then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,4,4));else local Z=game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RF/DragonHunter"):InvokeServer(unpack({[1]={Context="Check"}}));if not Z or Z and not Z.Text then getgenv().QuestHunterDragon=game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RF/DragonHunter"):InvokeServer(unpack({[1]={Context="RequestQuest"}})).Text;else getgenv().QuestHunterDragon=Z.Text;end;end;else local Z=DetectEmberTemplate();if Z then Instance.new("IntValue",Z).Name="Ignored";repeat wait();toTarget(Z.Part.CFrame);until not Z or not Z.Parent;return;end;if string.find(getgenv().QuestHunterDragon,"Hydra Enforcers")then local F=DetectMob("Hydra Enforcer");if not F then local c=DetectPartSpawnMob("Hydra Enforcer",true);if c then Instance.new("IntValue",c).Name="Ignored";repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob("Hydra Enforcer"))or not Settings["Fully Trial Draco"]or Z;wait(1);else DeleteIgnoredMobSpawn();end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"]or Z;end;elseif string.find(getgenv().QuestHunterDragon,"Venomous Assailants")then local F=DetectMob("Venomous Assailant");if not F then local c=DetectPartSpawnMob("Venomous Assailant",true);if c then Instance.new("IntValue",c).Name="Ignored";repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob("Venomous Assailant"))or not Settings["Fully Trial Draco"]or Z;wait(1);else DeleteIgnoredMobSpawn();end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Fully Trial Draco"]or Z;end;elseif string.find(getgenv().QuestHunterDragon,"trees")then local F,c=workspace.CurrentCamera,DetectTree();if c then Instance.new("IntValue",c).Name="Ignored";local l=tick();repeat wait();local H=c.WorldPivot.Position;if b[2]:DistanceFromCharacter(H)<50 then AutoAllSkill();end;if c:FindFirstChild("Meshes/plant1_Icosphere",true)then toTarget(c.WorldPivot);getgenv().AimPos=c.WorldPivot;b[5].Hit=CFrame.new(F.CFrame.Position,H);b[5].Target=c;else local H,M=(c.WorldPivot*CFrame.new(5,-20,0)).Position,(c.WorldPivot*CFrame.new(0,-20,0)).Position;toTarget(CFrame.new(H));getgenv().AimPos=CFrame.new(M);b[5].Hit=CFrame.new(F.CFrame.Position,M);b[5].Target=c;end;until not c or not c.Parent or not Settings["Fully Trial Draco"]or Z or(c:GetAttribute("AlreadyDestroyedClient"))or tick()-l>=15;end;end;end;return;end;if CheckCountItem("Scrap Metal",10)and(CheckCountItem("Blaze Ember",15))then game:GetService("ReplicatedStorage").Modules.Net:FindFirstChild("RF/Craft"):InvokeServer(unpack({[1]="Craft",[2]="Volcanic Magnet",[3]=1,[4]={}}));wait(2);end;else getgenv().dacoMagnet=true;if not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then local Z=checkboat();if not Z or Z and b[2]:DistanceFromCharacter(Z.VehicleSeat.Position)>=4000 then local F=CFrame.new(-16204.0810546875,9.0863618850708,479.2259521484375);if(F.Position-b[2].Character.HumanoidRootPart.Position).Magnitude>8 then if(F.Position-b[2].Character.HumanoidRootPart.Position).Magnitude>1000 then if not b[2]:GetAttribute("CurrentLocation")or b[2]:GetAttribute("CurrentLocation")~="Tiki Outpost"then if game:GetService("Players").LocalPlayer.Data.LastSpawnPoint.Value=="Tiki"or game:GetService("Players").LocalPlayer.Data.LastSpawnPoint.Value=="Tiki2"then b[2].Character.Humanoid.Health=0;return;end;end;end;toTarget(F);else game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("BuyBoat","PirateBrigade");wait(3);end;elseif b[2].Character.Humanoid.Sit then task.spawn(function()NoclipBoat(Z);end);local F=CFrame.new(-118834.515625,Z.WorldPivot.Y,-78.9505844116211)*CFrame.new(0,0,99999999);manageTween(Z.VehicleSeat,F,150,"TweenBoat");else if getgenv().TweenBoat then getgenv().TweenBoat:Pause();getgenv().TweenBoat:Cancel();end;toTarget(Z.VehicleSeat.CFrame);end;end;end;else if getgenv().turnoffnoclipBoatt then getgenv().turnoffnoclipBoatt=false;local Z=checkboat();if Z then TurnOffNoclipBoat(Z);end;end;if getgenv().RespawnVolcano and Settings["Webhook Find Prehistoric Island"]then getgenv().RespawnVolcano=false;WebhookFindVolcano();end;if getgenv().TweenBoat then getgenv().TweenBoat:Pause();getgenv().TweenBoat:Cancel();end;if not b[2]:GetAttribute("CurrentLocation")or b[2]:GetAttribute("CurrentLocation")~="Prehistoric Island"then local Z=DetectNpc("Fossil Expert");if Z then toTarget(Z.HumanoidRootPart.CFrame);return;end;end;if workspace.Map.PrehistoricIsland:FindFirstChild("TrialRock",true).Transparency==1 then getgenv().WaitingjoinTrial=true;toTarget(workspace.Map.PrehistoricIsland.TrialTeleport.CFrame);return;end;if DetectLava()then local Z,F=workspace.Map.PrehistoricIsland:GetDescendants();for c,c in b[6],Z,F do if c.Name=="TouchInterest"and c.Parent.Name~="TrialTeleport"then c:Destroy();end;end;end;if#workspace.Map.PrehistoricIsland.Core.InteriorLava:GetChildren()>0 then DeleteLava();end;if not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible then if workspace.Map.PrehistoricIsland.Core:FindFirstChild("ActivationPrompt")and(workspace.Map.PrehistoricIsland.Core.ActivationPrompt:FindFirstChild("ProximityPrompt"))then toTarget(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.CFrame);if b[2]:DistanceFromCharacter(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.Position)<8 then fireproximityprompt(workspace.Map.PrehistoricIsland.Core.ActivationPrompt.ProximityPrompt,1);wait(3);end;return;elseif not workspace.Map.PrehistoricIsland.Core:FindFirstChild("ActivationPrompt")and not workspace.Map.PrehistoricIsland.Core:FindFirstChild("FossilExpertSpawn")then local Z=DetectNpc("Fossil Expert");if Z then toTarget(Z.HumanoidRootPart.CFrame);return;end;end;else if b[7][7][b[7][6]]then local Z=workspace.Map.PrehistoricIsland.Core.PrehistoricRelic.Skull;repeat task.wait();toTarget(Z.CFrame);until b[2]:DistanceFromCharacter(Z.Position)<=200 or(DetectGolem())or(DetectRockVolcano());b[7][7][b[7][6]]=false;return;end;local Z=DetectGolem();if Z then repeat task.wait();toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,20,7));if Settings["Select Method Kill Golem"]=="Instant Kill [ Risk and can bug no die mob ]"then if b[2]:DistanceFromCharacter(Z.HumanoidRootPart.Position)<50 then KillRaidEnemy();end;else equiptool(NameWeapon(Settings["Select Weapon Kill Golem"]or"Melee"));getgenv().ClickM1Volcano(Z);end;if not getgenv().KillMobRaid and Settings["Kill Aura Only Raid And Volcano"]then getgenv().KillMobRaid=true;local F=Settings["Time Delay Kill"]or 5;Z.Humanoid:ChangeState(Enum.HumanoidStateType.Dead);delay(F,function()getgenv().KillMobRaid=false;end);end;until not IsMobAlive(Z)or not Settings["Fully Trial Draco"]or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;end;Z=DetectRockVolcano();if Z then if Settings["Fix Volcano Safe"]then local F=DetectPositionVolcano();local c,c=CheckPosnearRock(F,b[2].Character.HumanoidRootPart);if b[2]:DistanceFromCharacter((CheckPosnearRock(F,Z.WorldPivot)))>=400 then b[8][7][b[8][6]]=c+1;if c>=7 then b[8][7][b[8][6]]=1;end;local c=F[b[8][7][b[8][6]]];toTarget(CFrame.new(c));else local F=b[9][math.floor(Z.WorldPivot.Position.Y)];repeat task.wait();if b[2]:DistanceFromCharacter((Z.WorldPivot*F).Position)>8 then toTarget(Z.WorldPivot*F);end;if b[2]:DistanceFromCharacter(Z.WorldPivot.Position)<100 then AutoUseSkillFixLava();end;getgenv().AimPos=Z.WorldPivot;local c=workspace.CurrentCamera;b[5].Hit=Z.WorldPivot;b[5].Target=Z;until not Z or not Z.Parent or not Settings["Fully Trial Draco"]or not Z.VFXLayer.Specs.Enabled or(DetectGolem())or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;F=DetectGolem();if not F then b[7][7][b[7][6]]=true;end;wait(1);end;else local F=b[9][math.floor(Z.WorldPivot.Position.Y)];repeat task.wait();if b[2]:DistanceFromCharacter((Z.WorldPivot*F).Position)>8 then toTarget(Z.WorldPivot*F);end;if b[2]:DistanceFromCharacter(Z.WorldPivot.Position)<100 then AutoUseSkillFixLava();end;getgenv().AimPos=Z.WorldPivot;local c=workspace.CurrentCamera;b[5].Hit=Z.WorldPivot;b[5].Target=Z;until not Z or not Z.Parent or not Settings["Fully Trial Draco"]or not Z.VFXLayer.Specs.Enabled or(DetectGolem())or not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland")or not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.PrehistoricRaidTimer.Visible and not game:GetService("Players").LocalPlayer.PlayerGui.Main.TopHUDList.RaidTimer.Visible;F=DetectGolem();if not F then b[7][7][b[7][6]]=true;end;end;end;end;end;end;elseif string.find(CheckAcientOneDracoStatus(),"Can Buy Gear")then BuyGearDracoV4();else local Z=DetectMob(b[10]);if Z then repeat task.wait();sizepart(Z);BringMob(Z);UsedualFlock();ClickM1(Z);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(Z)or not Settings["Fully Trial Draco"];elseif b[3](b[10])=="table"then if#b[4][7][b[4][6]]>=#b[10]then b[4][7][b[4][6]]={};return;end;local Z=DetectPartSpawnMob(DetectNameTablePart(b[10]));if Z then table.insert(b[4][7][b[4][6]],DetectNameTablePart(b[10]));repeat wait();toTarget(Z.CFrame*CFrame.new(0,60,0));until(Z.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(b[10]))or not Settings["Fully Trial Draco"];wait(1);end;else local Z=DetectPartSpawnMob(b[10],true);if Z then Instance.new("IntValue",Z).Name="Ignored";repeat wait();toTarget(Z.CFrame*CFrame.new(0,60,0));until(Z.Position-b[2].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob(b[10]))or not Settings["Fully Trial Draco"];wait(1);else DeleteIgnoredMobSpawn();end;end;end;end
 
 function Auto_CDK_0458(...)local __args = {...};local b = __args[1];local Z = __args[5];return function()if(game:GetService("Workspace")._WorldOrigin.Locations["Heavenly Dimension"].Position-b[1].Character.HumanoidRootPart.Position).Magnitude<1000 then if game:GetService("Workspace").Map.HeavenlyDimension.Exit.BrickColor==BrickColor.new("Cloudy grey")then game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame=game:GetService("Workspace").Map.HeavenlyDimension.Exit.CFrame;toTarget(game:GetService("Workspace").Map.HeavenlyDimension.Exit.CFrame);return;end;if DetectMobCDK()then repeat task.wait();local Z=DetectMobHell();sizepart(Z);equiptool(NameWeapon("Sword"));toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(7,20,0));getgenv().ClickM1(Z);until not DetectMobCDK();else local Z=TourchGood5();if Z then repeat task.wait();if(b[1].Character.HumanoidRootPart.Position-game:GetService("Workspace").Map.HeavenlyDimension["Torch"..Z].Position).Magnitude>5 then toTarget(game:GetService("Workspace").Map.HeavenlyDimension["Torch"..Z].CFrame);else fireproximityprompt(game:GetService("Workspace").Map.HeavenlyDimension["Torch"..Z].ProximityPrompt,0);fireproximityprompt(game:GetService("Workspace").Map.HeavenlyDimension["Torch"..Z].ProximityPrompt,1);end;until DetectMobCDK();b[1].Character.HumanoidRootPart.CFrame=b[1].Character.HumanoidRootPart.CFrame*CFrame.new(0,50,0);end;end;elseif CheckNameBoss("Cake Queen")then local Z=CheckNameBoss("Cake Queen");repeat task.wait();sizepart(Z);equiptool(NameWeapon("Sword"));ClickM1(Z);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(Z)or not Settings["Auto CDK"];TweenManager.CancelCurrent();else if Settings["Select Method Hop CDK1"]and Settings["Select Method Hop CDK1"]["Find Cake Queen"]then b[2].CreateNoti({Title="Banana Cat Hub",Desc="Hop Server Find Cake Queen\"",ShowTime=5});HopServer();else b[2].CreateNoti({Title="Banana Cat Hub",Desc="Wating Cake Queen\"",ShowTime=5});end;wait(5);end;end;end
 
