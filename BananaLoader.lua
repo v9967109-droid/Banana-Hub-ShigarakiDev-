@@ -4,14 +4,35 @@
 -- Change WalkSpeed e Use Portals Rip Indra.
 -- Não contém alterações de combate.
 
-local __BF_Player = game:GetService("Players").LocalPlayer
+local __BF_GENV = (getgenv and getgenv()) or _G
+local Settings = __BF_GENV.Settings or {}
+__BF_GENV.Settings = Settings
+
+-- Valores padrão para impedir erro caso a source principal ainda não os tenha criado.
+Settings["Random Devil Fruit"] = Settings["Random Devil Fruit"] or false
+Settings["Auto Store Fruit"] = Settings["Auto Store Fruit"] or false
+Settings["Change WalkSpeed"] = Settings["Change WalkSpeed"] or false
+Settings["Use Portals Rip Indra"] = Settings["Use Portals Rip Indra"] or false
+Settings["Input WalkSpeed"] = Settings["Input WalkSpeed"] or 16
+
+local __BF_Players = game:GetService("Players")
+local __BF_Player = __BF_Players.LocalPlayer
+if not __BF_Player then
+    __BF_Player = __BF_Players.PlayerAdded:Wait()
+end
 local __BF_RS = game:GetService("ReplicatedStorage")
-local __BF_CommF = __BF_RS:WaitForChild("Remotes"):WaitForChild("CommF_")
+local __BF_Remotes = __BF_RS:FindFirstChild("Remotes")
+local __BF_CommF = __BF_Remotes and __BF_Remotes:FindFirstChild("CommF_")
+
+if not __BF_CommF then
+    warn("[BananaLoader] CommF_ não encontrado; funções que dependem dele ficarão desativadas.")
+end
 
 -- ============================================================
 -- AUTO RANDOM FRUIT (ZIOLES / COUSIN)
 -- ============================================================
 local function __BF_RandomFruitFixed()
+    if not __BF_CommF then return false end
     local ok, result = pcall(function()
         local BannerClient = require(__BF_RS:WaitForChild("Controllers"):WaitForChild("BannerClient"))
         local banner = BannerClient.TryGetBannerItemIfActiveAsync()
@@ -134,6 +155,7 @@ local function __BF_IsFruitTool(tool)
 end
 
 local function __BF_StoreOneFruit(tool)
+    if not __BF_CommF then return false end
     if not __BF_IsFruitTool(tool) or tool:FindFirstChild("BananaStorePending") then
         return false
     end
@@ -231,19 +253,32 @@ end)
 -- Usa SOMENTE os portais físicos do mapa.
 -- Não usa a fruta Portal e não procura Portal-Portal.
 -- ============================================================
-if SettingFarmMainSection then
+if SettingFarmMainSection and type(SettingFarmMainSection.CreateToggle) == "function" then
     pcall(function()
-        SettingFarmMainSection.CreateToggle({
+        SettingFarmMainSection:CreateToggle({
             Title = "Use Portals Rip Indra",
             Desc = "Usa os portais físicos para deslocamento durante funções de farm",
             Default = Settings["Use Portals Rip Indra"] or false,
         }, function(value)
-            SaveSettings("Use Portals Rip Indra", value)
+            if type(SaveSettings) == "function" then
+                pcall(SaveSettings, "Use Portals Rip Indra", value)
+            end
         end)
     end)
 end
 
-local __BF_ThirdSea = getgenv().CheckPlaceId
+local __BF_ThirdSea = __BF_GENV.CheckPlaceId
+-- Algumas sources usam CheckPlaceId como função; outras guardam o ID.
+if type(__BF_ThirdSea) == "function" then
+    local __ok, __value = pcall(__BF_ThirdSea)
+    if __ok then
+        __BF_ThirdSea = __value
+    else
+        __BF_ThirdSea = nil
+    end
+end
+-- Fallback seguro para o Third Sea do Blox Fruits.
+__BF_ThirdSea = tonumber(__BF_ThirdSea) or 7449423635
 local __BF_PortalHubPositions = {
     Castle = Vector3.new(-5092, 315, -3130),
     Mansion = Vector3.new(-12471, 374, -7551),
@@ -309,7 +344,21 @@ local function __BF_TouchPhysicalPortal(portal)
     return true
 end
 
-local __BF_OriginalToTarget = toTarget
+local __BF_OriginalToTarget = rawget(_G, "toTarget") or __BF_GENV.toTarget
+if __BF_OriginalToTarget == toTarget then
+    __BF_OriginalToTarget = nil
+end
+if type(__BF_OriginalToTarget) ~= "function" then
+    __BF_OriginalToTarget = function(targetCFrame, bypassSmallDistance)
+        local character = __BF_Player.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        if root and typeof(targetCFrame) == "CFrame" then
+            root.CFrame = targetCFrame
+            return true
+        end
+        return false
+    end
+end
 local __BF_PortalBusy = false
 
 local function __BF_TryRipIndraPortal(targetCFrame)
@@ -375,5 +424,8 @@ function toTarget(targetCFrame, bypassSmallDistance)
         return
     end
 
-    return __BF_OriginalToTarget(targetCFrame, bypassSmallDistance)
+    local ok, result = pcall(__BF_OriginalToTarget, targetCFrame, bypassSmallDistance)
+    if ok then
+        return result
+    end
 end
