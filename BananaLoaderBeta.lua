@@ -11783,7 +11783,7 @@ function manageTween(J, F, q, c)
 	if not J or not J:IsA("BasePart") or typeof(F) ~= "CFrame" then
 		return
 	end
-	q, c = math.max(tonumber(Settings["Value Speed Tween Boat"]) or (tonumber(q)) or 350, 1), c or "TweenBoat"
+	q, c = math.clamp(tonumber(Settings["Value Speed Tween Boat"]) or (tonumber(q)) or 350, 50, 390), c or "TweenBoat"
 	if not y[J] and (J.Position - F.Position).Magnitude <= H then
 		return
 	end
@@ -13650,19 +13650,6 @@ LeviathanEventSection.CreateToggle(
 		SaveSettings("Auto Attack Leviathan", b)
 	end
 )
-LeviathanEventSection.CreateToggle(
-	{ Title = "Auto Fire Shoot Heart Leviathan", Desc = nil, Default = Settings["Auto Fire Shoot Heart Leviathan"] or false },
-	function(value)
-		if value then
-			task.spawn(function()
-				while Settings["Auto Fire Shoot Heart Leviathan"] and task.wait(0.1) do
-					pcall(AutoFireLeviathanHeart)
-				end
-			end)
-		end
-		SaveSettings("Auto Fire Shoot Heart Leviathan", value)
-	end
-)
 
 LeviathanEventSection.CreateToggle(
 	{ Title = "Use Click M1 Fruit Leviathan", Desc = nil, Default = Settings["Use Click M1 Fruit Leviathan"] or false },
@@ -13758,25 +13745,6 @@ function ShootHeartLeviathan()
 		end
 	end
 end
-LeviathanEventSection.CreateToggle(
-	{
-		Title = "Auto Fire Shoot Heart Leviathan",
-		Desc = nil,
-		Default = Settings["Auto Fire Shoot Heart Leviathan"] or false,
-	},
-	function(b)
-		if b then
-			spawn(function()
-				while Settings["Auto Fire Shoot Heart Leviathan"] and (task.wait(0.1)) do
-					local s, s = pcall(function()
-						ShootHeartLeviathan()
-					end)
-				end
-			end)
-		end
-		SaveSettings("Auto Fire Shoot Heart Leviathan", b)
-	end
-)
 LeviathanEventSection.CreateToggle(
 	{ Title = "Teleport Frozen Dimension", Desc = nil, Default = Settings["Teleport Frozen Dimension"] or false },
 	function(b)
@@ -14144,25 +14112,29 @@ BoatSettingSection.CreateToggle({ Title = "Fly Boat", Desc = nil, Default = Sett
 	SaveSettings("Fly Boat", s)
 end)
 R = Settings["Value Speed Fly Boat"]
+Settings["Value Speed Boat"] = math.clamp(tonumber(Settings["Value Speed Boat"]) or 200, 0, 300)
+Settings["Value Speed Tween Boat"] = math.clamp(tonumber(Settings["Value Speed Tween Boat"]) or 350, 50, 390)
+Settings["Value Speed Fly Boat"] = math.clamp(tonumber(Settings["Value Speed Fly Boat"]) or 3, 0, 7)
 BoatSettingSection.CreateSlider(
-	{ Title = "Value Speed Boat", Min = 0, Max = 500, Default = Settings["Value Speed Boat"] or 200, Precise = true },
+	{ Title = "Value Speed Boat", Min = 0, Max = 300, Default = math.min(tonumber(Settings["Value Speed Boat"]) or 200, 300), Precise = true },
 	function(b)
-		SaveSettings("Value Speed Boat", b)
+		SaveSettings("Value Speed Boat", math.clamp(tonumber(b) or 200, 0, 300))
 	end
 )
 BoatSettingSection.CreateSlider(
 	{
 		Title = "Value Speed Tween Boat",
 		Min = 50,
-		Max = 2000,
-		Default = tonumber(Settings["Value Speed Tween Boat"]) or 350,
+		Max = 390,
+		Default = math.min(tonumber(Settings["Value Speed Tween Boat"]) or 350, 390),
 		Precise = true,
 	},
 	function(b)
-		SaveSettings("Value Speed Tween Boat", b)
+		local value = math.clamp(tonumber(b) or 350, 50, 390)
+		SaveSettings("Value Speed Tween Boat", value)
 		local s = getgenv().TweenBoat
 		if s and s.Speed then
-			s.Speed = math.max(tonumber(b) or 350, 1)
+			s.Speed = value
 		end
 	end
 )
@@ -14170,16 +14142,16 @@ BoatSettingSection.CreateSlider(
 	{
 		Title = "Value Speed Fly Boat",
 		Min = 0,
-		Max = 10,
-		Default = Settings["Value Speed Fly Boat"] or 3,
+		Max = 7,
+		Default = math.min(tonumber(Settings["Value Speed Fly Boat"]) or 3, 7),
 		Precise = true,
 	},
 	function(b)
-		SaveSettings("Value Speed Fly Boat", b)
+		SaveSettings("Value Speed Fly Boat", math.clamp(tonumber(b) or 3, 0, 7))
 	end
 )
 function checkSpeedboat()
-	local b, s = tonumber(Settings["Value Speed Boat"]) or 200, checkboat()
+	local b, s = math.clamp(tonumber(Settings["Value Speed Boat"]) or 200, 0, 300), checkboat()
 	if s then
 		local X = s:FindFirstChild("VehicleSeat")
 		if X and X.MaxSpeed + 1 < b then
@@ -14189,27 +14161,11 @@ function checkSpeedboat()
 	return false
 end
 function ChangeSpeedBoat()
-	local b, s = tonumber(Settings["Value Speed Boat"]) or 200, checkSpeedboat()
+	local b, s = math.clamp(tonumber(Settings["Value Speed Boat"]) or 200, 0, 300), checkSpeedboat()
 	if s then
 		s.VehicleSeat.MaxSpeed = b
 	end
 end
-BoatSettingSection.CreateToggle(
-	{ Title = "Change Speed Boat", Desc = nil, Default = Settings["Change Speed Boat"] or false },
-	function(b)
-		if b then
-			spawn(function()
-				while Settings["Change Speed Boat"] and (task.wait(0.3)) do
-					local s, X = pcall(ChangeSpeedBoat)
-					if not s then
-						WarnOnce("ChangeSpeedBoat", "Change Speed Boat loi: " .. tostring(X))
-					end
-				end
-			end)
-		end
-		SaveSettings("Change Speed Boat", b)
-	end
-)
 RaceMain = Main.CreatePage({ Page_Name = "Upgrade Race", Page_Title = "Upgrade Race" })
 RaceDracoMain = Main.CreatePage({ Page_Name = "Race Draco", Page_Title = "Race Draco" })
 RaceDracoSection = RaceDracoMain.CreateSection("Race Draco")
