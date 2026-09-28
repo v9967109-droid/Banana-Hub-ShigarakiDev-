@@ -5439,7 +5439,7 @@ function toTarget(P, e)
 	Z = if ReadyToDodge
 		then (CFrame.new(0, 200, 0))
 		else if G then (CFrame.new(0, Settings["Distance Teleport Y"] or 800, 0)) else Z
-	Y, e = math.min(tonumber(Settings["Speed Tween "]) or 220, 220), P * Z
+	Y, e = Settings["Speed Tween "] or 300, P * Z
 	if (e.Position - H.Position).Magnitude < 3 and not ReadyToDodge and not G then
 		TweenManager.CancelTweenOnly()
 		H.CFrame = e
@@ -6442,8 +6442,14 @@ SettingFarmMainSection.CreateToggle(
 		SaveSettings("Reset Teleport", I)
 	end
 )
+SettingFarmMainSection.CreateSlider(
+	{ Title = "Speed Tween ", Min = 0, Max = 1000, Default = Settings["Speed Tween "] or 300, Precise = true },
+	function(I)
+		SaveSettings("Speed Tween ", I)
+	end
+)
 SettingFarmMainSection.CreateLabel({
-	Title = "Recommended: 220 - Maximum Speed",
+	Title = "Recommended: 350. If you\226\128\153re farming spots close to each other, use a higher speed",
 })
 SettingSkillMain =
 	Main.CreatePage({ Page_Name = "Hold and Select Skill", Page_Title = "Setting Hold and Select Skill" })
@@ -7550,7 +7556,7 @@ BossRipIndraSection.CreateToggle(
 )
 BossRipIndraSection.CreateToggle(
 	{
-		Title = 'Hop Server Elite Hunter"',
+		Title = "Hop Server Elite Hunter",
 		Desc = "Hop if u have God chalice and teleport in safezone",
 		Default = Settings["Hop Server Elite Hunter"] or false,
 	},
@@ -8540,12 +8546,10 @@ task.spawn(function()
 				if y then
 					StackFarm = false
 					StackFarmOther = false
-					if
-						not string.find(
-							game.Players.LocalPlayer.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text,
-							y.Name
-						) or not game:GetService("Players").LocalPlayer.PlayerGui.Main.Quest.Visible
-					then
+					local QuestGui = game.Players.LocalPlayer.PlayerGui:FindFirstChild("Main") and game.Players.LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
+					local QuestTitle = QuestGui and QuestGui:FindFirstChild("Container") and QuestGui.Container:FindFirstChild("QuestTitle") and QuestGui.Container.QuestTitle:FindFirstChild("Title")
+					local QuestText = QuestTitle and QuestTitle.Text or ""
+					if not QuestGui or not QuestGui.Visible or not string.find(QuestText, y.Name, 1, true) then
 						game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("AbandonQuest")
 						game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("EliteHunter")
 					else
@@ -8566,10 +8570,13 @@ task.spawn(function()
 					end
 					return
 				elseif Settings["Hop Server Elite Hunter"] then
-					if not DetectItemPlr("God's Chalice") then
-						HopServer()
-					else
+					if DetectItemPlr("God's Chalice") then
 						toTarget(CFrame.new(-12463.8740234375, 374.9144592285156, -7523.77392578125))
+					else
+						if tick() - (getgenv().BananaEliteHopTick or 0) >= 8 then
+							getgenv().BananaEliteHopTick = tick()
+							pcall(HopServer)
+						end
 					end
 				end
 			end
@@ -10995,11 +11002,7 @@ local function b()
 	return false
 end
 function RandomFruit()
-	local ok, result = pcall(b)
-	if not ok then
-		return false
-	end
-	return result == true
+	return b()
 end
 function DetectCountDF()
 	local b = getbackpack()
@@ -11023,12 +11026,21 @@ function StoreFruit(E)
 			l = string.gsub(y.Name, " Fruit", "")
 			local E
 			E = y:GetAttribute("OriginalName") or l .. "-" .. l
-			local ok = pcall(function()
+			pcall(function()
+				local player = game:GetService("Players").LocalPlayer
+				if y.Parent == player.Backpack then
+					local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+					if humanoid then
+						humanoid:EquipTool(y)
+						task.wait(0.15)
+					end
+				end
+				if y.Parent == player.Character and type(y.Activate) == "function" then
+					y:Activate()
+					task.wait(0.15)
+				end
 				game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", E, y)
 			end)
-			if not ok then
-				continue
-			end
 			local l = Instance.new("IntValue")
 			l.Name = "Ignored"
 			l.Parent = y
@@ -11783,7 +11795,7 @@ function manageTween(J, F, q, c)
 	if not J or not J:IsA("BasePart") or typeof(F) ~= "CFrame" then
 		return
 	end
-	q, c = math.clamp(tonumber(Settings["Value Speed Tween Boat"]) or (tonumber(q)) or 350, 50, 390), c or "TweenBoat"
+	q, c = math.max(tonumber(Settings["Value Speed Tween Boat"]) or (tonumber(q)) or 350, 1), c or "TweenBoat"
 	if not y[J] and (J.Position - F.Position).Magnitude <= H then
 		return
 	end
@@ -11995,7 +12007,7 @@ function BuyBoatAndTeleBoat(P)
 	if not Settings["Auto Sea Event"] and not P then
 		return
 	end
-	if not Y or (Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 1000) then
+	if not Y or (Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 2500) then
 		local H = CFrame.new(-13.488054275512695, 10.311711311340332, 2927.692)
 		H = if game.PlaceId == getgenv().CheckPlaceId
 			then (CFrame.new(-16204.0810546875, 9.0863618850708, 479.2259521484375))
@@ -12778,14 +12790,20 @@ spawn(function()
 	end
 end)
 LeviathanEventSection = SeaEventTab.CreateSection("Leviathan Event")
+LeviathanEventSection.CreateButton({ Title = "Buy Spy" }, function()
+	local y = require(game.ReplicatedStorage.DialoguesList).Spy
+	require(game.ReplicatedStorage.DialogueController):Start(y)
+end)
 LeviathanEventSection.CreateButton({ Title = "Teleport your boat to current Position" }, function()
 	checkboat().VehicleSeat.CFrame = t.Character.HumanoidRootPart.CFrame
 end)
+-- Paga o Spy com os Fragmentos usando o fluxo de InfoLeviathan já presente na source.
+-- Para quando o status indicar que o Leviathan já pode ser encontrado.
 function AutoPaySpy()
 	if game.PlaceId ~= getgenv().CheckPlaceId then
 		return
 	end
-	while Settings["Auto Buy Spy"] do
+	while Settings["Auto Pay Spy"] do
 		local ok, status = pcall(StatusCheckLeviathan)
 		if not ok or status == "You can find leviathan now" then
 			return
@@ -12800,9 +12818,9 @@ function AutoPaySpy()
 	end
 end
 LeviathanEventSection.CreateToggle(
-	{ Title = "Auto Buy Spy", Desc = "Automatically buys the Spy until the Leviathan is available", Default = Settings["Auto Buy Spy"] or false },
+	{ Title = "Auto Pay Spy", Desc = "Paga o Spy com Fragmentos até o Leviathan estar à solta", Default = Settings["Auto Pay Spy"] or false },
 	function(y)
-		SaveSettings("Auto Buy Spy", y)
+		SaveSettings("Auto Pay Spy", y)
 		if y then
 			task.spawn(function()
 				pcall(AutoPaySpy)
@@ -12834,7 +12852,7 @@ function AutoBuyBoatBeastHunter()
 	local BoatShop = CFrame.new(-16204.0810546875, 9.0863618850708, 479.2259521484375)
 	if game.PlaceId ~= getgenv().CheckPlaceId then BoatShop = CFrame.new(-13.488054275512695, 10.311711311340332, 2927.692) end
 	if (BoatShop.Position - Root.Position).Magnitude > 8 then
-		if Settings["Reset Character Buy Boat"] and game.PlaceId == getgenv().CheckPlaceId and (BoatShop.Position - Root.Position).Magnitude > 1000 then
+		if Settings["Reset Character Buy Boat"] and game.PlaceId == getgenv().CheckPlaceId and (BoatShop.Position - Root.Position).Magnitude > 500 then
 			local LastSpawn = game:GetService("Players").LocalPlayer.Data.LastSpawnPoint.Value
 			if (not t:GetAttribute("CurrentLocation") or t:GetAttribute("CurrentLocation") ~= "Tiki Outpost") and (LastSpawn == "Tiki" or LastSpawn == "Tiki2") then
 				Humanoid.Health = 0
@@ -13644,6 +13662,19 @@ LeviathanEventSection.CreateToggle(
 		SaveSettings("Auto Attack Leviathan", b)
 	end
 )
+LeviathanEventSection.CreateToggle(
+	{ Title = "Auto Fire Shoot Heart Leviathan", Desc = nil, Default = Settings["Auto Fire Shoot Heart Leviathan"] or false },
+	function(value)
+		if value then
+			task.spawn(function()
+				while Settings["Auto Fire Shoot Heart Leviathan"] and task.wait(0.1) do
+					pcall(AutoFireLeviathanHeart)
+				end
+			end)
+		end
+		SaveSettings("Auto Fire Shoot Heart Leviathan", value)
+	end
+)
 
 LeviathanEventSection.CreateToggle(
 	{ Title = "Use Click M1 Fruit Leviathan", Desc = nil, Default = Settings["Use Click M1 Fruit Leviathan"] or false },
@@ -13680,21 +13711,6 @@ LeviathanEventSection.CreateToggle(
 	{ Title = "Use Your Boat Beast Hunter", Desc = nil, Default = Settings["Use Your Boat Beast Hunter"] or false },
 	function(b)
 		SaveSettings("Use Your Boat Beast Hunter", b)
-	end
-)
-LeviathanEventSection.CreateToggle(
-	{ Title = "Auto Fire Shot Heart Leviathan", Desc = nil, Default = Settings["Auto Fire Shot Heart Leviathan"] or false },
-	function(b)
-		SaveSettings("Auto Fire Shot Heart Leviathan", b)
-		if b then
-			spawn(function()
-				while Settings["Auto Fire Shot Heart Leviathan"] and (wait(0.1)) do
-					pcall(function()
-						ShootHeartLeviathan()
-					end)
-				end
-			end)
-		end
 	end
 )
 function checkboatBeastHunter()
@@ -13754,6 +13770,25 @@ function ShootHeartLeviathan()
 		end
 	end
 end
+LeviathanEventSection.CreateToggle(
+	{
+		Title = "Auto Fire Shoot Heart Leviathan",
+		Desc = nil,
+		Default = Settings["Auto Fire Shoot Heart Leviathan"] or false,
+	},
+	function(b)
+		if b then
+			spawn(function()
+				while Settings["Auto Fire Shoot Heart Leviathan"] and (task.wait(0.1)) do
+					local s, s = pcall(function()
+						ShootHeartLeviathan()
+					end)
+				end
+			end)
+		end
+		SaveSettings("Auto Fire Shoot Heart Leviathan", b)
+	end
+)
 LeviathanEventSection.CreateToggle(
 	{ Title = "Teleport Frozen Dimension", Desc = nil, Default = Settings["Teleport Frozen Dimension"] or false },
 	function(b)
@@ -14121,13 +14156,10 @@ BoatSettingSection.CreateToggle({ Title = "Fly Boat", Desc = nil, Default = Sett
 	SaveSettings("Fly Boat", s)
 end)
 R = Settings["Value Speed Fly Boat"]
-Settings["Value Speed Boat"] = math.clamp(tonumber(Settings["Value Speed Boat"]) or 200, 0, 300)
-Settings["Value Speed Tween Boat"] = math.clamp(tonumber(Settings["Value Speed Tween Boat"]) or 350, 50, 390)
-Settings["Value Speed Fly Boat"] = math.clamp(tonumber(Settings["Value Speed Fly Boat"]) or 3, 0, 7)
 BoatSettingSection.CreateSlider(
-	{ Title = "Value Speed Boat", Min = 0, Max = 300, Default = math.min(tonumber(Settings["Value Speed Boat"]) or 200, 300), Precise = true },
+	{ Title = "Value Speed Boat", Min = 0, Max = 300, Default = math.clamp(tonumber(Settings["Value Speed Boat"]) or 200, 0, 300), Precise = true },
 	function(b)
-		SaveSettings("Value Speed Boat", math.clamp(tonumber(b) or 200, 0, 300))
+		SaveSettings("Value Speed Boat", b)
 	end
 )
 BoatSettingSection.CreateSlider(
@@ -14135,15 +14167,14 @@ BoatSettingSection.CreateSlider(
 		Title = "Value Speed Tween Boat",
 		Min = 50,
 		Max = 390,
-		Default = math.min(tonumber(Settings["Value Speed Tween Boat"]) or 350, 390),
+		Default = math.clamp(tonumber(Settings["Value Speed Tween Boat"]) or 350, 50, 390),
 		Precise = true,
 	},
 	function(b)
-		local value = math.clamp(tonumber(b) or 350, 50, 390)
-		SaveSettings("Value Speed Tween Boat", value)
+		SaveSettings("Value Speed Tween Boat", b)
 		local s = getgenv().TweenBoat
 		if s and s.Speed then
-			s.Speed = value
+			s.Speed = math.max(tonumber(b) or 350, 1)
 		end
 	end
 )
@@ -14152,15 +14183,15 @@ BoatSettingSection.CreateSlider(
 		Title = "Value Speed Fly Boat",
 		Min = 0,
 		Max = 7,
-		Default = math.min(tonumber(Settings["Value Speed Fly Boat"]) or 3, 7),
+		Default = math.clamp(tonumber(Settings["Value Speed Fly Boat"]) or 3, 0, 7),
 		Precise = true,
 	},
 	function(b)
-		SaveSettings("Value Speed Fly Boat", math.clamp(tonumber(b) or 3, 0, 7))
+		SaveSettings("Value Speed Fly Boat", b)
 	end
 )
 function checkSpeedboat()
-	local b, s = math.clamp(tonumber(Settings["Value Speed Boat"]) or 200, 0, 300), checkboat()
+	local b, s = tonumber(Settings["Value Speed Boat"]) or 200, checkboat()
 	if s then
 		local X = s:FindFirstChild("VehicleSeat")
 		if X and X.MaxSpeed + 1 < b then
@@ -14168,12 +14199,6 @@ function checkSpeedboat()
 		end
 	end
 	return false
-end
-function ChangeSpeedBoat()
-	local b, s = math.clamp(tonumber(Settings["Value Speed Boat"]) or 200, 0, 300), checkSpeedboat()
-	if s then
-		s.VehicleSeat.MaxSpeed = b
-	end
 end
 function ChangeSpeedBoat()
 	local b, s = tonumber(Settings["Value Speed Boat"]) or 200, checkSpeedboat()
@@ -14197,7 +14222,6 @@ BoatSettingSection.CreateToggle(
 		SaveSettings("Change Speed Boat", b)
 	end
 )
-
 RaceMain = Main.CreatePage({ Page_Name = "Upgrade Race", Page_Title = "Upgrade Race" })
 RaceDracoMain = Main.CreatePage({ Page_Name = "Race Draco", Page_Title = "Race Draco" })
 RaceDracoSection = RaceDracoMain.CreateSection("Race Draco")
@@ -20566,9 +20590,9 @@ require(game:GetService("ReplicatedStorage").Modules.CombatUtil).GetTargetPositi
 end
 MISCPVPSection = PvpTab.CreateSection("MISC PVP")
 MISCPVPSection.CreateSlider(
-	{ Title = "Input WalkSpeed", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input WalkSpeed"]) or 220, 220), Precise = true },
+	{ Title = "Input WalkSpeed", Desc = "Recommended 220 maximum speed", Min = 0, Max = 220, Default = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 220, 0, 220), Precise = true },
 	function(b)
-		SaveSettings("Input WalkSpeed", math.clamp(tonumber(b) or 220, 0, 220))
+		SaveSettings("Input WalkSpeed", b)
 	end
 )
 MISCPVPSection.CreateSlider(
@@ -20595,42 +20619,23 @@ MISCPVPSection.CreateToggle(
 		end)
 	end
 )
-local function ApplyBananaWalkSpeed()
-	local Character = t.Character
-	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-	if not Humanoid then
-		return
-	end
-	if Settings["Change WalkSpeed"] then
-		local Speed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 220, 0, 220)
-		if Humanoid.WalkSpeed ~= Speed then
-			Humanoid.WalkSpeed = Speed
-		end
-	else
-		if Humanoid.WalkSpeed ~= 16 then
-			Humanoid.WalkSpeed = 16
-		end
-	end
-end
-
 MISCPVPSection.CreateToggle(
-	{ Title = "Change WalkSpeed", Desc = "Applies the selected WalkSpeed", Default = Settings["Change WalkSpeed"] or false },
+	{ Title = "Change WalkSpeed", Desc = nil, Default = Settings["Change WalkSpeed"] or false },
 	function(b)
 		SaveSettings("Change WalkSpeed", b)
-		pcall(ApplyBananaWalkSpeed)
+		pcall(function()
+			local Character = t.Character
+			local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+			if Humanoid then
+				if b then
+					Humanoid.WalkSpeed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 220, 0, 220)
+				else
+					Humanoid.WalkSpeed = 16
+				end
+			end
+		end)
 	end
 )
-
-if not getgenv().BananaWalkSpeedCharacterHook then
-	getgenv().BananaWalkSpeedCharacterHook = true
-	task.spawn(function()
-		local LocalPlayer = game:GetService("Players").LocalPlayer
-		LocalPlayer.CharacterAdded:Connect(function()
-			task.wait(0.5)
-			pcall(ApplyBananaWalkSpeed)
-		end)
-	end)
-end
 MISCPVPSection.CreateToggle(
 	{ Title = "Walk On Water", Desc = nil, Default = Settings["Walk On Water "] or true },
 	function(b)
@@ -21397,6 +21402,8 @@ if not getgenv().BananaCatMainLoop then
 	getgenv().BananaCatMainLoop = true
 	lastHopTick = tick()
 	lastFruitTick = tick()
+	lastRandomFruitTick = 0
+	local RANDOM_FRUIT_INTERVAL = 2 * 60 * 60
 	x.RenderStepped:Connect(function()
 		pcall(function()
 			sethiddenproperty(t, "SimulationRadius", 5000)
@@ -21438,13 +21445,17 @@ if not getgenv().BananaCatMainLoop then
 			end
 		end)
 		task.spawn(function()
-			while task.wait(0.05) do
+			while task.wait(0.15) do
 				local Character = t.Character
 				local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
 				if Humanoid then
 					pcall(function()
 						Humanoid.UseJumpPower = true
-						pcall(ApplyBananaWalkSpeed)
+						if Settings["Change WalkSpeed"] then
+							Humanoid.WalkSpeed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 220, 0, 220)
+						elseif Humanoid.WalkSpeed ~= 16 then
+							Humanoid.WalkSpeed = 16
+						end
 						if Settings["Change JumpPower"] then
 							Humanoid.JumpPower = tonumber(Settings["Input JumpPower"]) or 50
 						end
@@ -21456,21 +21467,22 @@ if not getgenv().BananaCatMainLoop then
 			lastFruitTick = tick()
 			local T, T = pcall(function()
 				if Settings["Random Devil Fruit"] then
-					if
-						not game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow")
-						or not game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow").Enabled
-					then
-						RandomFruit()
-					elseif
-						game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow").Enabled
-						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow:FindFirstChild("AboveSpinner")
-						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow.AboveSpinner:FindFirstChild("Navigation")
-						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow.AboveSpinner.Navigation:FindFirstChild("CloseButton")
-						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow.AboveSpinner.Navigation.CloseButton.Visible
-					then
-						pcall(function()
+					local now = tick()
+					local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+					local SpinnerWindow = PlayerGui and PlayerGui:FindFirstChild("SpinnerWindow")
+					if not SpinnerWindow or not SpinnerWindow.Enabled then
+						if lastRandomFruitTick == 0 or now - lastRandomFruitTick >= RANDOM_FRUIT_INTERVAL then
+							local ok = pcall(function()
+								return RandomFruit()
+							end)
+							if ok then
+								lastRandomFruitTick = now
+							end
+						end
+					else
+						if SpinnerWindow.Enabled and SpinnerWindow:FindFirstChild("AboveSpinner") and SpinnerWindow.AboveSpinner:FindFirstChild("Navigation") and SpinnerWindow.AboveSpinner.Navigation:FindFirstChild("CloseButton") and SpinnerWindow.AboveSpinner.Navigation.CloseButton.Visible then
 							Spinner:Close()
-						end)
+						end
 					end
 				end
 				if Settings["Auto Trade Bone"] then
@@ -22068,8 +22080,8 @@ end
 
 -- [BANANA CAT RECOVERED] CollectCombatTargetsFactory
 
--- [PASS31 SOURCE BODY] BypassTp (legacy helper; keep the active BypassTp table above intact)
-function BypassTpLegacy(target)
+-- [PASS31 SOURCE BODY] BypassTp
+function BypassTp(target)
     if not target then
         return nil
     end
