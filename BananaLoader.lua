@@ -21764,10 +21764,6 @@ BananaCatBF.AutoFarm = AutoFarm
 BananaCatBF.CheckQuest = CheckQuest
 getgenv().CheckQuest = CheckQuest
 
-getgenv().__BF_LOADED = true
-
-
-
 -- ============================================================================
 -- PASS 19 — SOURCE-NAME COMPATIBILITY ALIASES (PROVEN TARGET CORRELATIONS)
 -- ============================================================================
@@ -24593,3 +24589,11 @@ local __PASS38_NAMED_FUNCTIONS = {
 for __name, __fn in pairs(__PASS38_NAMED_FUNCTIONS) do
     if type(__fn) == "function" then rawset(_G, __name, __fn) end
 end
+
+-- ============================================================================
+-- BANANA LOADER LOAD STATE
+-- The source must finish executing before marking it as loaded.
+-- This prevents a partial/erroring load from blocking a later retry.
+-- ============================================================================
+getgenv().__BF_RESULT = true
+getgenv().__BF_LOADED = true
