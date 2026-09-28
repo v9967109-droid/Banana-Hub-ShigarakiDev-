@@ -7224,47 +7224,10 @@ end
 -- Mantém o controle disponível para o fluxo Start Farm e evita erro quando nenhum mob está carregado.
 local N = {}
 
--- Retorna o alvo real da missão especial ativa. A interface da missão é
--- considerada primeiro, porque pode ser atualizada antes do GuideModule.
-local function GetActiveFarmQuestMob(QuestName, QuestId, MethodMobList)
-	local QuestGui = t.PlayerGui and t.PlayerGui.Main and t.PlayerGui.Main:FindFirstChild("Quest")
-	local Title = QuestGui and QuestGui:FindFirstChild("Container")
-		and QuestGui.Container:FindFirstChild("QuestTitle")
-		and QuestGui.Container.QuestTitle:FindFirstChild("Title")
-	local QuestText = Title and tostring(Title.Text or "") or ""
-
-	-- A quest especial informa o alvo diretamente no texto.
-	-- Ex.: "Derrote 8 Skull Slayers" -> "Skull Slayer".
-	if QuestText ~= "" then
-		local Target = QuestText:match("[Dd]errote%s+%d+%s+(.+)")
-			or QuestText:match("[Dd]efeat%s+%d+%s+(.+)")
-		if Target then
-			Target = Target:gsub("%s+$", ""):gsub("%.", "")
-			-- O texto normalmente vem no plural, enquanto o Model usa o singular.
-			if Target:sub(-3):lower() == "ies" then
-				Target = Target:sub(1, -4) .. "y"
-			elseif Target:sub(-3):lower() == "ers" then
-				Target = Target:sub(1, -2)
-			elseif Target:sub(-1):lower() == "s" then
-				Target = Target:sub(1, -2)
-			end
-			if Target ~= "" then
-				return Target
-			end
-		end
-
-		-- Fallback para listas antigas do método, caso a interface da quest não
-		-- esteja disponível naquele frame.
-		if type(MethodMobList) == "table" then
-			local LowerQuestText = QuestText:lower()
-			for _, MobName in ipairs(MethodMobList) do
-				if type(MobName) == "string" and MobName ~= "" and LowerQuestText:find(MobName:lower(), 1, true) then
-					return MobName
-				end
-			end
-		end
-	end
-
+-- Retorna o alvo real da missão especial ativa. O GuideModule pode não estar
+-- atualizado no mesmo instante em que a interface da missão aparece, então
+-- usamos também os dados da própria quest como fallback.
+local function GetActiveFarmQuestMob(QuestName, QuestId)
 	local ActiveMob = GetNameDoubleQuest()
 	if type(ActiveMob) == "string" and ActiveMob ~= "" then
 		return ActiveMob
@@ -7305,30 +7268,30 @@ function FarmMethod()
 		end
 	end
 	f = V or (GetNameDoubleQuest()) or ""
-	local QuestGui = t.PlayerGui and t.PlayerGui.Main and t.PlayerGui.Main:FindFirstChild("Quest")
-	local QuestVisible = QuestGui and QuestGui.Visible or false
-	local ActiveQuestMob = GetActiveFarmQuestMob(H, J, V)
-	local HasActiveSpecialQuest = typeof(ActiveQuestMob) == "string" and ActiveQuestMob ~= ""
-
-	-- Start Farm primeiro espera a missão correta. Assim que o Auto Quest
-	-- aceitar a missão, o próximo ciclo passa imediatamente para o mob da missão.
-	if Settings["Auto Quest [Katakuri/Bone/Tyrant]"] and t.Data.Level.Value >= C then
-		if HasActiveSpecialQuest then
-			-- A missão já foi aceita: nunca volta ao NPC; o nome da própria missão
-			-- passa a ser o alvo principal do Farm.
-			f = ActiveQuestMob
-		elseif not QuestVisible then
-			QuestBoneAndkatakuri(H, J)
-			return
-		end
+	local QuestGui = t.PlayerGui.Main:FindFirstChild("Quest")
+	local QuestVisible = QuestGui and QuestGui.Visible
+	if
+		Settings["Auto Quest [Katakuri/Bone/Tyrant]"]
+		and t.Data.Level.Value >= C
+		and not QuestVisible
+	then
+		QuestBoneAndkatakuri(H, J)
+		return
 	elseif not QuestVisible and typeof(f) == "string" then
 		TakeQuestLevel()
 	else
-		-- Missão normal já ativa: usa o alvo informado pela própria missão.
-		if HasActiveSpecialQuest then
-			f = ActiveQuestMob
+		-- Quando a missão já foi aceita, usa o alvo exato da quest antes da lista
+		-- de mobs do método. Isso evita permanecer parado no NPC após aceitar.
+		local ActiveQuestMob = GetActiveFarmQuestMob(H, J)
+		if QuestVisible and typeof(ActiveQuestMob) == "string" and ActiveQuestMob ~= "" then
+			if typeof(V) == "table" then
+				if table.find(V, ActiveQuestMob) then
+					f = ActiveQuestMob
+				end
+			elseif V == ActiveQuestMob then
+				f = ActiveQuestMob
+			end
 		end
-	end
 		if not Settings["Farm Material"] and Settings["Select Method Farm"] == "Farm Tyrant of the Skies" then
 			if CheckNameBoss("Tyrant of the Skies") then
 				V = CheckNameBoss("Tyrant of the Skies")
