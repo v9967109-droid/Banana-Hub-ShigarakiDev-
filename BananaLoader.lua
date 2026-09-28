@@ -7224,10 +7224,27 @@ end
 -- Mantém o controle disponível para o fluxo Start Farm e evita erro quando nenhum mob está carregado.
 local N = {}
 
--- Retorna o alvo real da missão especial ativa. O GuideModule pode não estar
--- atualizado no mesmo instante em que a interface da missão aparece, então
--- usamos também os dados da própria quest como fallback.
-local function GetActiveFarmQuestMob(QuestName, QuestId)
+-- Retorna o alvo real da missão especial ativa. A interface da missão é
+-- considerada primeiro, porque pode ser atualizada antes do GuideModule.
+local function GetActiveFarmQuestMob(QuestName, QuestId, MethodMobList)
+	local QuestGui = t.PlayerGui and t.PlayerGui.Main and t.PlayerGui.Main:FindFirstChild("Quest")
+	local Title = QuestGui and QuestGui:FindFirstChild("Container")
+		and QuestGui.Container:FindFirstChild("QuestTitle")
+		and QuestGui.Container.QuestTitle:FindFirstChild("Title")
+	local QuestText = Title and tostring(Title.Text or "") or ""
+
+	-- Ex.: "Derrote 8 Skull Slayers" -> "Skull Slayer".
+	-- Usamos a lista do método para reconhecer o nome mesmo quando o texto
+	-- da missão estiver no plural.
+	if QuestText ~= "" and type(MethodMobList) == "table" then
+		local LowerQuestText = QuestText:lower()
+		for _, MobName in ipairs(MethodMobList) do
+			if type(MobName) == "string" and MobName ~= "" and LowerQuestText:find(MobName:lower(), 1, true) then
+				return MobName
+			end
+		end
+	end
+
 	local ActiveMob = GetNameDoubleQuest()
 	if type(ActiveMob) == "string" and ActiveMob ~= "" then
 		return ActiveMob
@@ -7282,7 +7299,7 @@ function FarmMethod()
 	else
 		-- Quando a missão já foi aceita, usa o alvo exato da quest antes da lista
 		-- de mobs do método. Isso evita permanecer parado no NPC após aceitar.
-		local ActiveQuestMob = GetActiveFarmQuestMob(H, J)
+		local ActiveQuestMob = GetActiveFarmQuestMob(H, J, V)
 		if QuestVisible and typeof(ActiveQuestMob) == "string" and ActiveQuestMob ~= "" then
 			if typeof(V) == "table" then
 				if table.find(V, ActiveQuestMob) then
