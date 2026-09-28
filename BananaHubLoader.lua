@@ -6446,6 +6446,9 @@ SaveSettings("Speed Tween ", 220)
 SettingFarmMainSection.CreateLabel({
 	Title = "Speed Tween: 220",
 })
+SettingFarmMainSection.CreateLabel({
+	Title = "Maximum speed 220 recommended",
+})
 SettingSkillMain =
 	Main.CreatePage({ Page_Name = "Hold and Select Skill", Page_Title = "Setting Hold and Select Skill" })
 SelectSkillsSection = SettingSkillMain.CreateSection("Select Skills")
@@ -7216,6 +7219,10 @@ function SpecialHop(C)
 		end
 	end
 end
+
+-- Histórico local dos pontos de spawn usados pelo FarmMethod.
+-- Mantém o controle disponível para o fluxo Start Farm e evita erro quando nenhum mob está carregado.
+local N = {}
 function FarmMethod()
 	local f, V, H = Settings["Select Method Farm"]
 	local C, J = 9999, 2
@@ -7239,16 +7246,24 @@ function FarmMethod()
 		end
 	end
 	f = V or (GetNameDoubleQuest()) or ""
+	local QuestGui = t.PlayerGui.Main:FindFirstChild("Quest")
+	local QuestVisible = QuestGui and QuestGui.Visible
 	if
 		Settings["Auto Quest [Katakuri/Bone/Tyrant]"]
 		and t.Data.Level.Value >= C
-		and not t.PlayerGui.Main:FindFirstChild("Quest").Visible
+		and not QuestVisible
 	then
 		QuestBoneAndkatakuri(H, J)
 		return
-	elseif not t.PlayerGui.Main:FindFirstChild("Quest").Visible and typeof(f) == "string" then
+	elseif not QuestVisible and typeof(f) == "string" then
 		TakeQuestLevel()
 	else
+		-- Quando a missão já foi aceita, usa o alvo registrado na missão primeiro.
+		-- Isso evita ficar parado no NPC enquanto o método ainda contém a lista completa de mobs.
+		local ActiveQuestMob = GetNameDoubleQuest()
+		if QuestVisible and typeof(ActiveQuestMob) == "string" and ActiveQuestMob ~= "" then
+			f = ActiveQuestMob
+		end
 		if not Settings["Farm Material"] and Settings["Select Method Farm"] == "Farm Tyrant of the Skies" then
 			if CheckNameBoss("Tyrant of the Skies") then
 				V = CheckNameBoss("Tyrant of the Skies")
