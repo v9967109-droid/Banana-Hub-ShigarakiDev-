@@ -7433,10 +7433,22 @@ function FarmMethod()
 		end
 	end
 	f = V or (GetNameDoubleQuest()) or ""
-	local QuestGui = t.PlayerGui.Main:FindFirstChild("Quest")
-	local QuestVisible = QuestGui and QuestGui.Visible
+	local QuestVisible = AQIsQuestActive()
 	local IsSpecialFarm = SelectedFarmMethod == "Farm Katakuri" or SelectedFarmMethod == "Farm Bones" or SelectedFarmMethod == "Farm Tyrant of the Skies"
 
+	-- Aviso ao Auto Quest: missão concluída (ou sumiu) -> libera a trava agora,
+	-- sem esperar, para o Auto Quest ligar e pegar a próxima missão.
+	if
+		SelectedFarmMethod ~= "Aura Farm"
+		and not Settings["Farm Material"]
+		and (SelectedFarmMethod == "Level Farm" or t.Data.Level.Value >= C)
+		and (not QuestVisible)
+	then
+		local st = getgenv().__AQState
+		if st and st.locked then
+			st.request = true
+		end
+	end
 	-- Se a missão atual já terminou, não mantém o alvo antigo.
 	-- Aguarda a interface da quest fechar e o próximo ciclo assume a nova quest.
 	-- Auto Quest owns the character only while there is no active quest
@@ -7447,13 +7459,13 @@ function FarmMethod()
 		and SelectedFarmMethod ~= "Aura Farm"
 		and not Settings["Farm Material"]
 		and (SelectedFarmMethod == "Level Farm" or t.Data.Level.Value >= C)
-		and (not QuestVisible or IsActiveFarmQuestComplete())
+		and (not QuestVisible)
 	then
 		return
 	end
 	-- Without an active quest the farm still targets the method's mobs
 	-- (Level Farm: mob of the current level quest).
-	if SelectedFarmMethod == "Level Farm" and not QuestVisible and not Settings["Farm Material"] then
+	if SelectedFarmMethod == "Level Farm" and not Settings["Farm Material"] then
 		local okL, info = pcall(GetLevelQuestInfo, t.Data.Level.Value)
 		if okL and type(info) == "table" and info.Mob then
 			f = info.Mob
@@ -7462,17 +7474,12 @@ function FarmMethod()
 	do
 		-- Quando a missão já foi aceita, usa o alvo exato da quest antes da lista
 		-- de mobs do método. Isso evita permanecer parado no NPC após aceitar.
-		local ActiveQuestMob = GetActiveFarmQuestMob(H, J)
-		if QuestVisible and type(ActiveQuestMob) == "string" and ActiveQuestMob ~= "" then
-			f = ActiveQuestMob
-		end
+		-- O Farm IGNORA a missão: o alvo vem sempre do método (lista de mobs
+		-- / mob do nível). A missão só é cuidada pelo Auto Quest.
 		-- Depois de aceitar a missão, o alvo passa a ser EXCLUSIVAMENTE o NPC
 		-- definido pela quest ativa. Assim todos os métodos (Level, Bones,
 		-- Katakuri, Tyrant e Aura) seguem a mesma regra e, ao concluir a
 		-- missão, o fluxo volta automaticamente para TakeQuestLevel().
-		if QuestVisible and typeof(ActiveQuestMob) == "string" and ActiveQuestMob ~= "" then
-			f = ActiveQuestMob
-		end
 		if not Settings["Farm Material"] and SelectedFarmMethod == "Farm Tyrant of the Skies" then
 			if CheckNameBoss("Tyrant of the Skies") then
 				V = CheckNameBoss("Tyrant of the Skies")
@@ -7641,6 +7648,42 @@ local AutoQuestInfo = {
 	["Auto Farm Katakuri"] = { 2275, "CakeQuest2", 2 },
 	["Auto Farm Tyrant of the Skies"] = { 2575, "TikiQuest3", 2 },
 }
+-- Detector único de missão ativa (usado pelo Auto Quest e pelo Farm).
+-- Conta como "tem missão" se o jogo tem QuestData OU a interface da quest está visível
+-- (antes só olhava a interface, e se ela estivesse oculta o personagem ia ao NPC de novo).
+-- Só considera concluída quando a missão some, ou quando todas as tarefas zeraram por 1.5s.
+function AQIsQuestActive()
+	local st = getgenv().__AQState
+	local has = false
+	pcall(function()
+		has = DontQuest() == true
+	end)
+	local shown = false
+	pcall(function()
+		local g = t.PlayerGui.Main:FindFirstChild("Quest")
+		shown = g ~= nil and g.Visible == true
+	end)
+	if not (has or shown) then
+		if st then st.doneSince = nil end
+		return false
+	end
+	local done = false
+	pcall(function()
+		done = IsActiveFarmQuestComplete()
+	end)
+	if done then
+		if st then
+			st.doneSince = st.doneSince or tick()
+			if tick() - st.doneSince >= 1.5 then
+				return false
+			end
+		end
+	elseif st then
+		st.doneSince = nil
+	end
+	return true
+end
+
 -- Trava de missão: depois de aceitar, NÃO aceita de novo até a missão ser concluída.
 getgenv().__AQState = getgenv().__AQState or { locked = false, seen = false, since = 0, goneSince = nil }
 spawn(function()
@@ -7655,8 +7698,7 @@ spawn(function()
 			if Settings["Farm Mastery"] and Settings["Start Farm"] then
 				return
 			end
-			local QuestGui = t.PlayerGui.Main:FindFirstChild("Quest")
-			if QuestGui and QuestGui.Visible and not IsActiveFarmQuestComplete() then
+			if AQIsQuestActive() then
 				return
 			end
 			local sel = GetSelectedIndividualFarm()
@@ -7677,6 +7719,9 @@ spawn(function()
 				end
 				nearNPC = npcPos ~= nil and (npcPos - root.Position).Magnitude <= 8
 			end
+			if AQIsQuestActive() then
+				return
+			end
 			if info and t.Data.Level.Value >= info[1] then
 				QuestBoneAndkatakuri(info[2], info[3])
 			elseif sel == "Auto Farm Level" then
@@ -7685,8 +7730,7 @@ spawn(function()
 			if nearNPC then
 				-- Espera a missão registrar e trava para não aceitar outra vez.
 				local function registered()
-					local g = t.PlayerGui.Main:FindFirstChild("Quest")
-					return g and g.Visible and not IsActiveFarmQuestComplete()
+					return AQIsQuestActive()
 				end
 				local deadline = tick() + 3
 				repeat task.wait(0.1) until registered() or tick() > deadline
@@ -7729,8 +7773,13 @@ spawn(function()
 				SetAutoQuest(false)
 				return
 			end
-			local QuestGui = t.PlayerGui.Main:FindFirstChild("Quest")
-			local questActive = QuestGui and QuestGui.Visible and not IsActiveFarmQuestComplete()
+			local questActive = AQIsQuestActive()
+			if st.request then
+				st.request = false
+				if st.locked and not questActive then
+					st.locked, st.seen, st.goneSince = false, false, nil
+				end
+			end
 			if st.locked then
 				if questActive then
 					st.seen, st.goneSince = true, nil
