@@ -1,3 +1,5 @@
+AutoFarmLevel = true
+
 function BuildSchema()
 	local m, E = {}, 1
 	for l, Q in pairs(Options) do
@@ -4349,7 +4351,8 @@ function SetNoClip(l)
 end
 function ToggleNoclip()
 	if
-		Settings["Start Farm"]
+		Settings["Auto Farm Active"]
+		or Settings["Start Farm"]
 		or Settings["Auto Present Event"]
 		or Settings["Auto Celestial Soldier"]
 		or Settings["Auto Rip Commander"]
@@ -4664,6 +4667,10 @@ spawn(function()
 	end
 end)
 local S, L, d = game:GetService("Players"), game:GetService("ReplicatedStorage"), game:GetService("VirtualInputManager")
+
+-- Portal helpers
+-- The old implementation only worked when the player owned the Portal Fruit.
+-- Keep it available as a fallback, but do not require the fruit for the setting itself.
 local function _()
 	local o = t.Data:FindFirstChild("DevilFruit")
 	if not o or o.Value ~= "Portal-Portal" then
@@ -5025,7 +5032,7 @@ function travelFunctions.TweenBypass(y, x)
 	return false
 end
 function ShouldResetTeleportSmart(y)
-	if not Settings["Reset Teleport"] then
+	if not (Settings["Teleport Bypass"] or Settings["Reset Teleport"]) then
 		return false
 	end
 	if G or ReadyToDodge then
@@ -5311,21 +5318,74 @@ function toTarget(P, e)
 			return
 		end
 		if Settings["Use Portal Teleport"] then
-			local d = t.Character:FindFirstChild("Portal-Portal") or (t.Backpack:FindFirstChild("Portal-Portal"))
-			if d and d.Level.Value > 200 and (_()) then
-				for d, _ in pairs(l[game.Workspace:GetAttribute("MAP")] or {}) do
-					if (P.Position - _).Magnitude <= 3000 and Y >= 3000 then
-						getgenv().noclip = true
-						if o(d) then
-							local l = tick() + 5
-							repeat
-								task.wait(0.2)
-							until t.Character and (t.Character.HumanoidRootPart.Position - _).Magnitude < 500
-								or tick() > l
-							return
+			-- Use the real in-game portal system when it is available.
+			-- No Portal Fruit is required for this path. If no physical portal can
+			-- be resolved, leave the normal entrance/tween logic below in control.
+			local function UsePhysicalPortal(targetPosition)
+				local character = t.Character
+				local root = character and character:FindFirstChild("HumanoidRootPart")
+				if not root or not targetPosition then
+					return false
+				end
+
+				local map = workspace:FindFirstChild("Map")
+				if not map then
+					return false
+				end
+
+				local best, bestDistance
+				for _, obj in ipairs(map:GetDescendants()) do
+					local n = string.lower(obj.Name)
+					if n:find("portal", 1, true) or n:find("teleport", 1, true) then
+						local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
+						if part then
+							local dist = (part.Position - targetPosition).Magnitude
+							if dist <= 350 and (not bestDistance or dist < bestDistance) then
+								best, bestDistance = obj, dist
+							end
 						end
 					end
 				end
+
+				if not best then
+					return false
+				end
+
+				local part = best:IsA("BasePart") and best or best:FindFirstChildWhichIsA("BasePart", true)
+				if not part then
+					return false
+				end
+
+				getgenv().noclip = true
+				local old = root.CFrame
+				local ok = pcall(function()
+					root.CFrame = part.CFrame + Vector3.new(0, 3, 0)
+				end)
+				if not ok then
+					root.CFrame = old
+					return false
+				end
+
+				local prompt = best:FindFirstChildWhichIsA("ProximityPrompt", true)
+				if prompt then
+					pcall(function()
+						if fireproximityprompt then
+							fireproximityprompt(prompt)
+						end
+					end)
+				end
+				return true
+			end
+
+			local target
+			for name, pos in pairs(l[workspace:GetAttribute("MAP")] or {}) do
+				if (P.Position - pos).Magnitude <= 3000 and Y >= 3000 then
+					target = {name = name, position = pos}
+					break
+				end
+			end
+			if target and UsePhysicalPortal(target.position) then
+				return
 			end
 		end
 		local l, d, _
@@ -5439,7 +5499,7 @@ function toTarget(P, e)
 	Z = if ReadyToDodge
 		then (CFrame.new(0, 200, 0))
 		else if G then (CFrame.new(0, Settings["Distance Teleport Y"] or 800, 0)) else Z
-	Y, e = math.min(tonumber(Settings["Speed Tween "]) or 220, 220), P * Z
+	Y, e = math.clamp(tonumber(Settings["Speed Tween "]) or 220, 0, 220), P * Z
 	if (e.Position - H.Position).Magnitude < 3 and not ReadyToDodge and not G then
 		TweenManager.CancelTweenOnly()
 		H.CFrame = e
@@ -6437,13 +6497,18 @@ SettingFarmMainSection.CreateToggle(
 	end
 )
 SettingFarmMainSection.CreateToggle(
-	{ Title = "Reset Teleport [ Beta ]", Desc = nil, Default = Settings["Reset Teleport"] or false },
+	{ Title = "Teleport Bypass [ Beta ]", Desc = "Uses the existing safe reset/bypass system", Default = Settings["Teleport Bypass"] or Settings["Reset Teleport"] or false },
 	function(I)
+		SaveSettings("Teleport Bypass", I)
 		SaveSettings("Reset Teleport", I)
 	end
 )
+SaveSettings("Speed Tween ", 220)
 SettingFarmMainSection.CreateLabel({
-	Title = "Recommended: 220 - Maximum Speed",
+	Title = "Speed Tween: 220",
+})
+SettingFarmMainSection.CreateLabel({
+	Title = "Recommended 220 | Maximum Speed",
 })
 SettingSkillMain =
 	Main.CreatePage({ Page_Name = "Hold and Select Skill", Page_Title = "Setting Hold and Select Skill" })
@@ -6497,18 +6562,44 @@ _("Gun", { "Z", "X" })
 _("Blox Fruit", { "Z", "X", "C", "V", "F" })
 FarmMain = Main.CreatePage({ Page_Name = "Farming", Page_Title = "Farming" })
 SettingAutoFarmSection = FarmMain.CreateSection("Setting Farm")
-SettingAutoFarmSection.CreateDropdown(
-	{
-		Title = "Select Method Farm",
-		List = { "Level Farm", "Farm Bones", "Farm Katakuri", "Farm Tyrant of the Skies", "Aura Farm" },
-		Search = false,
-		Selected = false,
-		Default = Settings["Select Method Farm"] or nil,
-	},
-	function(o)
-		SaveSettings("Select Method Farm", o)
+-- Individual farm toggles. Each method keeps its own state; no Select Method Farm dropdown.
+local FarmToggleNames = {
+	"Auto Farm Level",
+	"Auto Farm Bones",
+	"Auto Farm Katakuri",
+	"Auto Farm Tyrant of the Skies",
+	"Aura Farm",
+}
+
+local function GetSelectedIndividualFarm()
+	for _, name in ipairs(FarmToggleNames) do
+		if Settings[name] then
+			return name
+		end
 	end
-)
+	return nil
+end
+
+local function SetIndividualFarm(name, enabled)
+	SaveSettings(name, enabled)
+	if enabled then
+		for _, other in ipairs(FarmToggleNames) do
+			if other ~= name then
+				SaveSettings(other, false)
+			end
+		end
+		SaveSettings("Auto Farm Active", true)
+	else
+		SaveSettings("Auto Farm Active", GetSelectedIndividualFarm() ~= nil)
+	end
+	-- Farm toggles only kill mobs. Quests are handled exclusively by the Auto Quest toggle.
+end
+
+SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Level", Desc = nil, Default = Settings["Auto Farm Level"] or false }, function(v) SetIndividualFarm("Auto Farm Level", v) end)
+SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Bones", Desc = nil, Default = Settings["Auto Farm Bones"] or false }, function(v) SetIndividualFarm("Auto Farm Bones", v) end)
+SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Katakuri", Desc = nil, Default = Settings["Auto Farm Katakuri"] or false }, function(v) SetIndividualFarm("Auto Farm Katakuri", v) end)
+SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Tyrant of the Skies", Desc = nil, Default = Settings["Auto Farm Tyrant of the Skies"] or false }, function(v) SetIndividualFarm("Auto Farm Tyrant of the Skies", v) end)
+SettingAutoFarmSection.CreateToggle({ Title = "Aura Farm", Desc = nil, Default = Settings["Aura Farm"] or false }, function(v) SetIndividualFarm("Aura Farm", v) end)
 SettingAutoFarmSection.CreateSlider(
 	{
 		Title = "Distance Farm Aura",
@@ -6533,22 +6624,35 @@ SettingAutoFarmSection.CreateToggle(
 		SaveSettings("Hop Find Katakuri", o)
 	end
 )
+local o = SettingAutoFarmSection.CreateLabel({ Title = "Auto Quest only accepts the quest. Farm toggles only kill mobs." })
 SettingAutoFarmSection.CreateToggle(
-	{
-		Title = "Auto Quest [Katakuri/Bone/Tyrant]",
-		Desc = nil,
-		Default = Settings["Auto Quest [Katakuri/Bone/Tyrant]"] or false,
-	},
-	function(o)
-		SaveSettings("Auto Quest [Katakuri/Bone/Tyrant]", o)
-	end
-)
-local o = SettingAutoFarmSection.CreateToggle(
-	{ Title = "Start Farm", Desc = nil, Default = Settings["Start Farm"] or false },
+	{ Title = "Auto Quest", Desc = "Automatic: turns ON by itself when a Farm is active and there is no quest, turns OFF when the quest is accepted, turns ON again when it is completed.", Default = Settings["Auto Quest [Katakuri/Bone/Tyrant]"] or false },
 	function(V)
-		SaveSettings("Start Farm", V)
+		-- Mudança automática (feita pelo gerenciador): só atualiza o valor,
+		-- sem SaveSettings(false) para não cancelar o tween do farm.
+		if (getgenv().__AutoQuestInternalUntil or 0) > tick() then
+			Settings["Auto Quest [Katakuri/Bone/Tyrant]"] = V
+			return
+		end
+		SaveSettings("Auto Quest [Katakuri/Bone/Tyrant]", V)
 	end
 )
+-- Mantém os toggles "Farm Mastery" e "Start Farm" visualmente iguais ao estado real.
+function SyncMasteryToggle(title, v)
+	if getgenv().__MasterySyncing then
+		return
+	end
+	getgenv().__MasterySyncing = true
+	pcall(function()
+		local opt = Options and Options[title]
+		if opt and opt.FunctionCreate and opt.FunctionCreate.SetValue then
+			opt.FunctionCreate:SetValue(v)
+		end
+	end)
+	task.delay(0.3, function()
+		getgenv().__MasterySyncing = false
+	end)
+end
 MasteryFarmSection = FarmMain.CreateSection("Mastery Farm")
 MasteryFarmSection.CreateDropdown(
 	{
@@ -6569,12 +6673,26 @@ MasteryFarmSection.CreateSlider(
 	end
 )
 MasteryFarmSection.CreateToggle(
-	{ Title = "Farm Mastery", Desc = nil, Default = Settings["Farm Mastery"] or false },
+	{ Title = "Farm Mastery", Desc = "Enable mastery farming logic.", Default = Settings["Farm Mastery"] or false },
 	function(V)
 		SaveSettings("Farm Mastery", V)
-		if V and not Settings["Start Farm"] then
-			A.CreateNoti({ Title = "Banana Cat Hub", Desc = "Turn On Start Farm Plz", ShowTime = 5 })
+		if not V then
+			SaveSettings("Start Farm", false)
+			-- Devolve o controle ao farm normal (antes ficava parado).
+			SaveSettings("Auto Farm Active", GetSelectedIndividualFarm() ~= nil)
+			SyncMasteryToggle("Start Farm", false)
 		end
+	end
+)
+MasteryFarmSection.CreateToggle(
+	{ Title = "Start Farm", Desc = "Start Farm Mastery in Haunted Castle only.", Default = Settings["Start Farm"] or false },
+	function(V)
+		-- Start Farm is the only switch that activates Farm Mastery.
+		SaveSettings("Farm Mastery", V)
+		SaveSettings("Start Farm", V)
+		-- Stops the running farm loops so they release control to Mastery.
+		SaveSettings("Auto Farm Active", (not V) and GetSelectedIndividualFarm() ~= nil)
+		SyncMasteryToggle("Farm Mastery", V)
 	end
 )
 FarmingMaterialSection = FarmMain.CreateSection("Farming Material")
@@ -6760,6 +6878,7 @@ local function B(C)
 	return c
 end
 
+GetLevelQuestInfo = B
 TakeQuestLevel = function()
 	local V = B(t.Data.Level.Value)
 	if not V or not V.Pos then
@@ -7214,8 +7333,85 @@ function SpecialHop(C)
 		end
 	end
 end
+
+-- Histórico local dos pontos de spawn usados pelo FarmMethod.
+-- Mantém o controle disponível para o fluxo Start Farm e evita erro quando nenhum mob está carregado.
+local N = {}
+
+-- Retorna o alvo real da missão especial ativa. O GuideModule pode não estar
+-- atualizado no mesmo instante em que a interface da missão aparece, então
+-- usamos também os dados da própria quest como fallback.
+local function GetActiveFarmQuestMob(QuestName, QuestId)
+	-- Sempre prioriza a tarefa realmente aceita pelo jogador.
+	-- Isso impede que Bones/Katakuri/Tyrant/Aura ataquem um NPC
+	-- diferente do objetivo atual da quest.
+	local ok, QuestData = pcall(function()
+		return Z and Z.Data and Z.Data.QuestData
+	end)
+	if ok and type(QuestData) == "table" and type(QuestData.Task) == "table" then
+		for MobName, Progress in pairs(QuestData.Task) do
+			if type(MobName) == "string" and MobName ~= "" then
+				local n = tonumber(Progress)
+				if n == nil or n > 0 then
+					return MobName
+				end
+			end
+		end
+	end
+
+	local ActiveMob = GetNameDoubleQuest()
+	if type(ActiveMob) == "string" and ActiveMob ~= "" then
+		return ActiveMob
+	end
+
+	local ok2, Task = pcall(function()
+		return H[QuestName] and H[QuestName][QuestId] and H[QuestName][QuestId].Task
+	end)
+	if ok2 and type(Task) == "table" then
+		for MobName in pairs(Task) do
+			if type(MobName) == "string" and MobName ~= "" then
+				return MobName
+			end
+		end
+	end
+end
+
+local function IsActiveFarmQuestComplete()
+	local ok, Task = pcall(function()
+		return Z and Z.Data and Z.Data.QuestData and Z.Data.QuestData.Task
+	end)
+	if not ok or type(Task) ~= "table" then
+		return false
+	end
+	local found = false
+	for _, Progress in pairs(Task) do
+		found = true
+		local n = tonumber(Progress)
+		if n == nil or n > 0 then
+			return false
+		end
+	end
+	return found
+end
+
+local SpecialQuestCycleState = {
+	lastQuestVisible = false,
+}
+
 function FarmMethod()
-	local f, V, H = Settings["Select Method Farm"]
+	local selectedToggle = GetSelectedIndividualFarm()
+	if not selectedToggle then
+		return
+	end
+	local f, V, H
+	local SelectedFarmMethod = ({
+		["Auto Farm Level"] = "Level Farm",
+		["Auto Farm Bones"] = "Farm Bones",
+		["Auto Farm Katakuri"] = "Farm Katakuri",
+		["Auto Farm Tyrant of the Skies"] = "Farm Tyrant of the Skies",
+		["Aura Farm"] = "Aura Farm",
+	})[selectedToggle]
+	f = SelectedFarmMethod
 	local C, J = 9999, 2
 	if f == "Farm Katakuri" then
 		C, V, H = 2275, y, "CakeQuest2"
@@ -7237,18 +7433,47 @@ function FarmMethod()
 		end
 	end
 	f = V or (GetNameDoubleQuest()) or ""
-	if not t.PlayerGui.Main:FindFirstChild("Quest").Visible and typeof(f) == "string" then
-		TakeQuestLevel()
-	else
-		if
-			Settings["Auto Quest [Katakuri/Bone/Tyrant]"]
-			and t.Data.Level.Value >= C
-			and not t.PlayerGui.Main:FindFirstChild("Quest").Visible
-		then
-			QuestBoneAndkatakuri(H, J)
-			return
+	local QuestGui = t.PlayerGui.Main:FindFirstChild("Quest")
+	local QuestVisible = QuestGui and QuestGui.Visible
+	local IsSpecialFarm = SelectedFarmMethod == "Farm Katakuri" or SelectedFarmMethod == "Farm Bones" or SelectedFarmMethod == "Farm Tyrant of the Skies"
+
+	-- Se a missão atual já terminou, não mantém o alvo antigo.
+	-- Aguarda a interface da quest fechar e o próximo ciclo assume a nova quest.
+	-- Auto Quest owns the character only while there is no active quest
+	-- (or the current one is finished). Otherwise both loops would fight
+	-- over the teleport and the character stays stuck at the NPC.
+	if
+		Settings["Auto Quest [Katakuri/Bone/Tyrant]"]
+		and SelectedFarmMethod ~= "Aura Farm"
+		and not Settings["Farm Material"]
+		and (SelectedFarmMethod == "Level Farm" or t.Data.Level.Value >= C)
+		and (not QuestVisible or IsActiveFarmQuestComplete())
+	then
+		return
+	end
+	-- Without an active quest the farm still targets the method's mobs
+	-- (Level Farm: mob of the current level quest).
+	if SelectedFarmMethod == "Level Farm" and not QuestVisible and not Settings["Farm Material"] then
+		local okL, info = pcall(GetLevelQuestInfo, t.Data.Level.Value)
+		if okL and type(info) == "table" and info.Mob then
+			f = info.Mob
 		end
-		if not Settings["Farm Material"] and Settings["Select Method Farm"] == "Farm Tyrant of the Skies" then
+	end
+	do
+		-- Quando a missão já foi aceita, usa o alvo exato da quest antes da lista
+		-- de mobs do método. Isso evita permanecer parado no NPC após aceitar.
+		local ActiveQuestMob = GetActiveFarmQuestMob(H, J)
+		if QuestVisible and type(ActiveQuestMob) == "string" and ActiveQuestMob ~= "" then
+			f = ActiveQuestMob
+		end
+		-- Depois de aceitar a missão, o alvo passa a ser EXCLUSIVAMENTE o NPC
+		-- definido pela quest ativa. Assim todos os métodos (Level, Bones,
+		-- Katakuri, Tyrant e Aura) seguem a mesma regra e, ao concluir a
+		-- missão, o fluxo volta automaticamente para TakeQuestLevel().
+		if QuestVisible and typeof(ActiveQuestMob) == "string" and ActiveQuestMob ~= "" then
+			f = ActiveQuestMob
+		end
+		if not Settings["Farm Material"] and SelectedFarmMethod == "Farm Tyrant of the Skies" then
 			if CheckNameBoss("Tyrant of the Skies") then
 				V = CheckNameBoss("Tyrant of the Skies")
 				repeat
@@ -7266,7 +7491,7 @@ function FarmMethod()
 					end
 					UsedualFlock()
 					ClickM1(V)
-				until not IsMobAlive(V) or not Settings["Start Farm"] or not StackFarm
+				until not IsMobAlive(V) or not Settings["Auto Farm Active"] or not StackFarm
 				return
 			else
 				local V = workspace:FindFirstChild("Map", true)
@@ -7320,7 +7545,7 @@ function FarmMethod()
 		end
 		if
 			not Settings["Farm Material"]
-			and Settings["Select Method Farm"] == "Farm Katakuri"
+			and SelectedFarmMethod == "Farm Katakuri"
 			and not Settings["Ignore Attack Katakuri"]
 		then
 			if CheckNameBoss("Cake Prince") then
@@ -7340,7 +7565,7 @@ function FarmMethod()
 					end
 					UsedualFlock()
 					ClickM1(V)
-				until not IsMobAlive(V) or not Settings["Start Farm"] or not StackFarm
+				until not IsMobAlive(V) or not Settings["Auto Farm Active"] or not StackFarm
 				return
 			else
 				spawn(function()
@@ -7366,7 +7591,7 @@ function FarmMethod()
 						toTarget(H.CFrame * CFrame.new(0, 60, 0))
 					until (H.Position - t.Character.HumanoidRootPart.Position).Magnitude <= 100
 						or (DetectMob(f))
-						or not Settings["Start Farm"]
+						or not Settings["Auto Farm Active"]
 						or not StackFarm
 					wait(1)
 				end
@@ -7379,7 +7604,7 @@ function FarmMethod()
 						toTarget(Y.CFrame * CFrame.new(0, 60, 0))
 					until (Y.Position - t.Character.HumanoidRootPart.Position).Magnitude <= 100
 						or (DetectMob(f))
-						or not Settings["Start Farm"]
+						or not Settings["Auto Farm Active"]
 						or not StackFarm
 					wait(1)
 				else
@@ -7391,7 +7616,7 @@ function FarmMethod()
 				task.wait()
 				sizepart(V)
 				BringMob(V)
-				FarmMastery(V)
+				UsedualFlock()
 				ClickM1(V)
 				if
 					game:GetService("Players").LocalPlayer.PlayerGui.TransformationHUD.ImageLabel.Visible
@@ -7403,17 +7628,172 @@ function FarmMethod()
 				else
 					toTarget(V.HumanoidRootPart.CFrame * CFrame.new(7, 20, 0))
 				end
-			until not IsMobAlive(V) or not Settings["Start Farm"] or not StackFarm
+			until not IsMobAlive(V) or not Settings["Auto Farm Active"] or not StackFarm
 			if getgenv().QuestTrainer and getgenv().QuestTrainer.CountKillMob then
 				getgenv().QuestTrainer.CountKillMob = getgenv().QuestTrainer.CountKillMob + 1
 			end
 		end
 	end
 end
+-- Auto Quest: ONLY accepts the quest of the selected farm. Never attacks.
+local AutoQuestInfo = {
+	["Auto Farm Bones"] = { 2050, "HauntedQuest2", 2 },
+	["Auto Farm Katakuri"] = { 2275, "CakeQuest2", 2 },
+	["Auto Farm Tyrant of the Skies"] = { 2575, "TikiQuest3", 2 },
+}
+-- Trava de missão: depois de aceitar, NÃO aceita de novo até a missão ser concluída.
+getgenv().__AQState = getgenv().__AQState or { locked = false, seen = false, since = 0, goneSince = nil }
+spawn(function()
+	while task.wait(0.3) do
+		pcall(function()
+			if not Settings["Auto Quest [Katakuri/Bone/Tyrant]"] then
+				return
+			end
+			if getgenv().__AQState.locked then
+				return
+			end
+			if Settings["Farm Mastery"] and Settings["Start Farm"] then
+				return
+			end
+			local QuestGui = t.PlayerGui.Main:FindFirstChild("Quest")
+			if QuestGui and QuestGui.Visible and not IsActiveFarmQuestComplete() then
+				return
+			end
+			local sel = GetSelectedIndividualFarm()
+			local info = sel and AutoQuestInfo[sel]
+			local root = t.Character and t.Character:FindFirstChild("HumanoidRootPart")
+			-- Só considera "tentou aceitar" quando está junto do NPC (senão está apenas andando até ele).
+			local nearNPC = false
+			if root then
+				local npcPos
+				if info and t.Data.Level.Value >= info[1] then
+					local cf = getgenv().questpoint and getgenv().questpoint[info[2]]
+					npcPos = cf and cf.Position
+				elseif sel == "Auto Farm Level" then
+					local okI, qi = pcall(GetLevelQuestInfo, t.Data.Level.Value)
+					if okI and type(qi) == "table" and qi.Pos then
+						npcPos = typeof(qi.Pos) == "CFrame" and qi.Pos.Position or qi.Pos
+					end
+				end
+				nearNPC = npcPos ~= nil and (npcPos - root.Position).Magnitude <= 8
+			end
+			if info and t.Data.Level.Value >= info[1] then
+				QuestBoneAndkatakuri(info[2], info[3])
+			elseif sel == "Auto Farm Level" then
+				TakeQuestLevel()
+			end
+			if nearNPC then
+				-- Espera a missão registrar e trava para não aceitar outra vez.
+				local function registered()
+					local g = t.PlayerGui.Main:FindFirstChild("Quest")
+					return g and g.Visible and not IsActiveFarmQuestComplete()
+				end
+				local deadline = tick() + 3
+				repeat task.wait(0.1) until registered() or tick() > deadline
+				if registered() then
+					local st = getgenv().__AQState
+					st.locked, st.seen, st.since, st.goneSince = true, true, tick(), nil
+				end
+			end
+		end)
+	end
+end)
+
+-- Auto Quest automático: liga quando há Farm ativo sem missão, desliga ao aceitar,
+-- liga de novo quando a missão é concluída, e desliga quando nenhum Farm está ativo.
+spawn(function()
+	-- locals dentro da função para não consumir o limite de locals do chunk principal
+	local AQ_KEY = "Auto Quest [Katakuri/Bone/Tyrant]"
+	local function SetAutoQuest(v)
+		v = v and true or false
+		if Settings[AQ_KEY] == v then
+			return
+		end
+		getgenv().__AutoQuestInternalUntil = tick() + 0.5
+		Settings[AQ_KEY] = v
+		pcall(function()
+			local opt = Options and Options["Auto Quest"]
+			if opt and opt.FunctionCreate and opt.FunctionCreate.SetValue then
+				opt.FunctionCreate:SetValue(v)
+			end
+		end)
+	end
+	while task.wait(0.25) do
+		pcall(function()
+			local sel = GetSelectedIndividualFarm()
+			local masteryOn = Settings["Farm Mastery"] and Settings["Start Farm"]
+			local needsQuest = sel ~= nil and sel ~= "Aura Farm" and not masteryOn and not Settings["Farm Material"]
+			local st = getgenv().__AQState
+			if not needsQuest then
+				st.locked, st.seen, st.goneSince = false, false, nil
+				SetAutoQuest(false)
+				return
+			end
+			local QuestGui = t.PlayerGui.Main:FindFirstChild("Quest")
+			local questActive = QuestGui and QuestGui.Visible and not IsActiveFarmQuestComplete()
+			if st.locked then
+				if questActive then
+					st.seen, st.goneSince = true, nil
+				elseif st.seen then
+					-- missão sumiu/concluiu: confirma por 1s antes de liberar a próxima
+					st.goneSince = st.goneSince or tick()
+					if tick() - st.goneSince >= 1 then
+						st.locked, st.seen, st.goneSince = false, false, nil
+					end
+				elseif tick() - st.since > 8 then
+					st.locked = false
+				end
+			end
+			SetAutoQuest(not questActive and not st.locked)
+		end)
+	end
+end)
+
+local function HauntedCastleMasteryFarm()
+	if not Settings["Farm Mastery"] or not Settings["Start Farm"] then
+		return
+	end
+	local character = t.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	local masteryMobs = {
+		"Reborn Skeleton",
+		"Demonic Soul",
+		"Living Zombie",
+		"Possessed Mummy",
+		"Posessed Mummy",
+	}
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then return end
+	local mob = DetectMob(masteryMobs)
+	if mob and mob:FindFirstChild("HumanoidRootPart") then
+		sizepart(mob)
+		pcall(BringMob, mob)
+		-- Antes o personagem não se aproximava do mob e ficava parado.
+		if Settings["Select Method Farm Mastery"] == "Blox Fruit" then
+			toTarget(mob.HumanoidRootPart.CFrame * CFrame.new(-7, getgenv().YPosFruit or 20, 0))
+		else
+			toTarget(mob.HumanoidRootPart.CFrame * CFrame.new(7, 20, 0))
+		end
+		FarmMastery(mob)
+		ClickM1(mob)
+		return
+	end
+	local spawnPart = DetectPartSpawnMob(DetectNameTablePart(masteryMobs))
+	if spawnPart then
+		toTarget(spawnPart.CFrame * CFrame.new(0, 60, 0))
+	else
+		toTarget(CFrame.new(-9509.34961, 142.130661, 5535.16309))
+	end
+end
+
 spawn(function()
 	while task.wait() do
-		local f, f = pcall(function()
-			if Settings["Start Farm"] and StackFarm then
+		pcall(function()
+			if Settings["Farm Mastery"] and Settings["Start Farm"] then
+				HauntedCastleMasteryFarm()
+			elseif GetSelectedIndividualFarm() and StackFarm then
 				FarmMethod()
 			end
 		end)
@@ -10995,54 +11375,118 @@ local function b()
 	return false
 end
 function RandomFruit()
-	local ok, result = pcall(b)
-	if not ok then
+	local Players = game:GetService("Players")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local LocalPlayer = Players.LocalPlayer
+	local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	local CommF = Remotes and Remotes:FindFirstChild("CommF_")
+	if not CommF or not LocalPlayer then
 		return false
 	end
-	return result == true
+
+	-- Evita chamadas repetidas enquanto a janela de giro ainda está aberta.
+	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local SpinnerWindow = PlayerGui and PlayerGui:FindFirstChild("SpinnerWindow")
+	if SpinnerWindow and SpinnerWindow.Enabled then
+		return false
+	end
+
+	local ok, result = pcall(function()
+		return CommF:InvokeServer("Cousin", "Buy")
+	end)
+	return ok and result ~= false
 end
-function DetectCountDF()
-	local b = getbackpack()
-	if #b < 1 then
+
+local FruitInfoModule = require(game:GetService("ReplicatedStorage").FruitInfo)
+
+local function GetFruitOriginalName(tool)
+	if not tool or not tool:IsA("Tool") then
+		return nil
+	end
+
+	local original = tool:GetAttribute("OriginalName")
+	if typeof(original) == "string" and original ~= "" then
+		return original
+	end
+
+	local name = tool.Name
+	local clean = string.gsub(name, " Fruit$", "")
+	if clean == "" then
+		return nil
+	end
+
+	-- Formato usado pelo inventário de frutas quando o atributo não existe.
+	return clean .. "-" .. clean
+end
+
+local function IsFruitTool(tool)
+	if not tool or not tool:IsA("Tool") then
+		return false
+	end
+	if tool:FindFirstChild("Ignored") then
+		return false
+	end
+
+	local original = tool:GetAttribute("OriginalName")
+	local name = tool.Name
+	return (typeof(original) == "string" and original ~= "")
+		or string.find(name, "Fruit", 1, true) ~= nil
+end
+
+function StoreFruit(container)
+	if not container or not container.GetChildren then
 		return
 	end
-	local E, l = t.Data.FruitCap.Value, B()
-	for y, P in b, nil, nil do
-		y = P:GetAttribute("OriginalName")
-		for b, b in l, nil, nil do
-			if b.Type == "Blox Fruit" and (b.Name == y and b.Count < E or b.Name ~= y) then
-				return true
+
+	local Players = game:GetService("Players")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local LocalPlayer = Players.LocalPlayer
+	local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	local CommF = Remotes and Remotes:FindFirstChild("CommF_")
+	if not CommF or not LocalPlayer then
+		return
+	end
+
+	for _, tool in ipairs(container:GetChildren()) do
+		if IsFruitTool(tool) then
+			local fruitName = GetFruitOriginalName(tool)
+			if fruitName then
+				local ok = pcall(function()
+					CommF:InvokeServer("StoreFruit", fruitName, tool)
+				end)
+
+				if ok and tool.Parent then
+					local ignored = tool:FindFirstChild("Ignored")
+					if not ignored then
+						ignored = Instance.new("IntValue")
+						ignored.Name = "Ignored"
+						ignored.Parent = tool
+					end
+				end
+
+				if Settings["Webhook Store Fruit"] and Settings["Select Rarity Fruit"] then
+					local rarityName
+					pcall(function()
+						local info = FruitInfoModule.List[fruitName]
+						if info and info.Rarity then
+							rarityName = info.Rarity.Name
+						end
+					end)
+
+					if (rarityName and Settings["Select Rarity Fruit"][rarityName])
+						or SkinFruit[tool.Name] then
+						pcall(function()
+							getgenv().WebhookStoreFruit(tool.Name)
+						end)
+					end
+				end
+
+				task.wait(1)
 			end
 		end
 	end
 end
-local b = require(game:GetService("ReplicatedStorage").FruitInfo)
-function StoreFruit(E)
-	for l, y in pairs(E:GetChildren()) do
-		if y:IsA("Tool") and (string.find(y.Name, "Fruit")) and not y:FindFirstChild("Ignored") then
-			l = string.gsub(y.Name, " Fruit", "")
-			local E
-			E = y:GetAttribute("OriginalName") or l .. "-" .. l
-			local ok = pcall(function()
-				game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", E, y)
-			end)
-			if not ok then
-				continue
-			end
-			local l = Instance.new("IntValue")
-			l.Name = "Ignored"
-			l.Parent = y
-			if
-				Settings["Webhook Store Fruit"]
-				and Settings["Select Rarity Fruit"]
-				and (b.List[E] and Settings["Select Rarity Fruit"][b.List[E].Rarity.Name] or SkinFruit[y.Name])
-			then
-				getgenv().WebhookStoreFruit(y.Name)
-			end
-			task.wait(2)
-		end
-	end
-end
+
 function DetectFruitShop()
 	local b, E, l = next, game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("GetFruits", false)
 	for y, y in b, E, l do
@@ -11783,7 +12227,7 @@ function manageTween(J, F, q, c)
 	if not J or not J:IsA("BasePart") or typeof(F) ~= "CFrame" then
 		return
 	end
-	q, c = math.clamp(tonumber(Settings["Value Speed Tween Boat"]) or (tonumber(q)) or 350, 50, 390), c or "TweenBoat"
+	q, c = math.clamp(tonumber(Settings["Value Speed Tween Boat"]) or (tonumber(q)) or 390, 1, 390), c or "TweenBoat"
 	if not y[J] and (J.Position - F.Position).Magnitude <= H then
 		return
 	end
@@ -11995,7 +12439,7 @@ function BuyBoatAndTeleBoat(P)
 	if not Settings["Auto Sea Event"] and not P then
 		return
 	end
-	if not Y or (Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 500) then
+	if not Y or (Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 2500) then
 		local H = CFrame.new(-13.488054275512695, 10.311711311340332, 2927.692)
 		H = if game.PlaceId == getgenv().CheckPlaceId
 			then (CFrame.new(-16204.0810546875, 9.0863618850708, 479.2259521484375))
@@ -12778,10 +13222,6 @@ spawn(function()
 	end
 end)
 LeviathanEventSection = SeaEventTab.CreateSection("Leviathan Event")
-LeviathanEventSection.CreateButton({ Title = "Buy Spy" }, function()
-	local y = require(game.ReplicatedStorage.DialoguesList).Spy
-	require(game.ReplicatedStorage.DialogueController):Start(y)
-end)
 LeviathanEventSection.CreateButton({ Title = "Teleport your boat to current Position" }, function()
 	checkboat().VehicleSeat.CFrame = t.Character.HumanoidRootPart.CFrame
 end)
@@ -12816,20 +13256,38 @@ LeviathanEventSection.CreateToggle(
 		end
 	end
 )
+LeviathanEventSection.CreateSlider(
+	{ Title = "Distance Auto Buy Boat", Min = 0, Max = 5000, Default = math.min(tonumber(Settings["Distance Auto Buy Boat"]) or 1250, 5000), Precise = true },
+	function(y)
+		local Distance = math.clamp(tonumber(y) or 1250, 0, 5000)
+		Settings["Distance Auto Buy Boat"] = Distance
+		SaveSettings("Distance Auto Buy Boat", Distance)
+	end
+)
 LeviathanEventSection.CreateToggle(
 	{ Title = "Auto Buy Boat Beast Hunter", Desc = nil, Default = Settings["Auto Buy Boat Beast Hunter"] or false },
 	function(y)
 		SaveSettings("Auto Buy Boat Beast Hunter", y)
 	end
 )
+SaveSettings("Distance Auto Buy Boat", math.clamp(tonumber(Settings["Distance Auto Buy Boat"]) or 1250, 0, 5000))
+
 function AutoBuyBoatBeastHunter()
 	if not Settings["Auto Buy Boat Beast Hunter"] or not Settings["Auto Find Leviathan"] then return end
 	local Boats = game:GetService("Workspace"):FindFirstChild("Boats")
+	local BuyDistance = math.clamp(tonumber(Settings["Distance Auto Buy Boat"]) or 1250, 0, 5000)
 	if Boats then
+		local RootForBoat = t.Character and t.Character:FindFirstChild("HumanoidRootPart")
 		for _, Boat in ipairs(Boats:GetChildren()) do
 			if Boat:IsA("Model") and Boat.Name == "Beast Hunter" then
 				local BoatHumanoid = Boat:FindFirstChild("Humanoid")
-				if not BoatHumanoid or BoatHumanoid.Value > 0 then return Boat end
+				local Seat = Boat:FindFirstChild("VehicleSeat")
+				local Alive = not BoatHumanoid or BoatHumanoid.Value > 0
+				local BoatDistance = RootForBoat and Seat and (Seat.Position - RootForBoat.Position).Magnitude or math.huge
+				-- Só reutiliza um Beast Hunter que esteja dentro da distância escolhida.
+				if Alive and BoatDistance <= BuyDistance then
+					return Boat
+				end
 			end
 		end
 	end
@@ -12847,7 +13305,8 @@ function AutoBuyBoatBeastHunter()
 				return
 			end
 		end
-		if BypassTp and type(BypassTp.TweenBypass) == "function" and (BoatShop.Position - Root.Position).Magnitude > 3000 then
+		local BuyDistance = math.clamp(tonumber(Settings["Distance Auto Buy Boat"]) or 1250, 0, 5000)
+		if BypassTp and type(BypassTp.TweenBypass) == "function" and (BoatShop.Position - Root.Position).Magnitude > BuyDistance then
 			if BypassTp.TweenBypass(BoatShop) then return end
 		end
 		toTarget(BoatShop)
@@ -13650,7 +14109,6 @@ LeviathanEventSection.CreateToggle(
 		SaveSettings("Auto Attack Leviathan", b)
 	end
 )
-
 LeviathanEventSection.CreateToggle(
 	{ Title = "Use Click M1 Fruit Leviathan", Desc = nil, Default = Settings["Use Click M1 Fruit Leviathan"] or false },
 	function(b)
@@ -13686,6 +14144,24 @@ LeviathanEventSection.CreateToggle(
 	{ Title = "Use Your Boat Beast Hunter", Desc = nil, Default = Settings["Use Your Boat Beast Hunter"] or false },
 	function(b)
 		SaveSettings("Use Your Boat Beast Hunter", b)
+	end
+)
+LeviathanEventSection.CreateToggle(
+	{
+		Title = "Auto Fire Shoot Heart Leviathan",
+		Desc = nil,
+		Default = Settings["Auto Fire Shoot Heart Leviathan"] or false,
+	},
+	function(b)
+		SaveSettings("Auto Fire Shoot Heart Leviathan", b)
+		if b then
+			task.spawn(function()
+				while Settings["Auto Fire Shoot Heart Leviathan"] do
+					pcall(AutoFireLeviathanHeart)
+					task.wait(0.15)
+				end
+			end)
+		end
 	end
 )
 function checkboatBeastHunter()
@@ -13817,12 +14293,12 @@ LeviathanEventSection.CreateSlider(
 	{
 		Title = "Speed Boat Auto Drive",
 		Min = 0,
-		Max = 500,
-		Default = Settings["Speed Boat Auto Drive"] or 300,
+		Max = 300,
+		Default = math.min(tonumber(Settings["Speed Boat Auto Drive"]) or 300, 300),
 		Precise = true,
 	},
 	function(b)
-		SaveSettings("Speed Boat Auto Drive", b)
+		SaveSettings("Speed Boat Auto Drive", math.clamp(tonumber(b) or 300, 0, 300))
 	end
 )
 LeviathanEventSection.CreateToggle(
@@ -14112,13 +14588,10 @@ BoatSettingSection.CreateToggle({ Title = "Fly Boat", Desc = nil, Default = Sett
 	SaveSettings("Fly Boat", s)
 end)
 R = Settings["Value Speed Fly Boat"]
-Settings["Value Speed Boat"] = math.clamp(tonumber(Settings["Value Speed Boat"]) or 200, 0, 300)
-Settings["Value Speed Tween Boat"] = math.clamp(tonumber(Settings["Value Speed Tween Boat"]) or 350, 50, 390)
-Settings["Value Speed Fly Boat"] = math.clamp(tonumber(Settings["Value Speed Fly Boat"]) or 3, 0, 7)
 BoatSettingSection.CreateSlider(
-	{ Title = "Value Speed Boat", Min = 0, Max = 300, Default = math.min(tonumber(Settings["Value Speed Boat"]) or 200, 300), Precise = true },
+	{ Title = "Value Speed Boat", Min = 0, Max = 300, Default = math.min(tonumber(Settings["Value Speed Boat"]) or 300, 300), Precise = true },
 	function(b)
-		SaveSettings("Value Speed Boat", math.clamp(tonumber(b) or 200, 0, 300))
+		SaveSettings("Value Speed Boat", b)
 	end
 )
 BoatSettingSection.CreateSlider(
@@ -14126,15 +14599,14 @@ BoatSettingSection.CreateSlider(
 		Title = "Value Speed Tween Boat",
 		Min = 50,
 		Max = 390,
-		Default = math.min(tonumber(Settings["Value Speed Tween Boat"]) or 350, 390),
+		Default = math.min(tonumber(Settings["Value Speed Tween Boat"]) or 390, 390),
 		Precise = true,
 	},
 	function(b)
-		local value = math.clamp(tonumber(b) or 350, 50, 390)
-		SaveSettings("Value Speed Tween Boat", value)
+		SaveSettings("Value Speed Tween Boat", b)
 		local s = getgenv().TweenBoat
 		if s and s.Speed then
-			s.Speed = value
+			s.Speed = math.clamp(tonumber(b) or 390, 1, 390)
 		end
 	end
 )
@@ -14143,15 +14615,15 @@ BoatSettingSection.CreateSlider(
 		Title = "Value Speed Fly Boat",
 		Min = 0,
 		Max = 7,
-		Default = math.min(tonumber(Settings["Value Speed Fly Boat"]) or 3, 7),
+		Default = math.min(tonumber(Settings["Value Speed Fly Boat"]) or 7, 7),
 		Precise = true,
 	},
 	function(b)
-		SaveSettings("Value Speed Fly Boat", math.clamp(tonumber(b) or 3, 0, 7))
+		SaveSettings("Value Speed Fly Boat", b)
 	end
 )
 function checkSpeedboat()
-	local b, s = math.clamp(tonumber(Settings["Value Speed Boat"]) or 200, 0, 300), checkboat()
+	local b, s = math.clamp(tonumber(Settings["Value Speed Boat"]) or 300, 0, 300), checkboat()
 	if s then
 		local X = s:FindFirstChild("VehicleSeat")
 		if X and X.MaxSpeed + 1 < b then
@@ -14161,15 +14633,9 @@ function checkSpeedboat()
 	return false
 end
 function ChangeSpeedBoat()
-	local b, s = math.clamp(tonumber(Settings["Value Speed Boat"]) or 200, 0, 300), checkSpeedboat()
+	local b, s = math.clamp(tonumber(Settings["Value Speed Boat"]) or 300, 0, 300), checkSpeedboat()
 	if s then
-		s.VehicleSeat.MaxSpeed = b
-	end
-end
-function ChangeSpeedBoat()
-	local b, s = tonumber(Settings["Value Speed Boat"]) or 200, checkSpeedboat()
-	if s then
-		s.VehicleSeat.MaxSpeed = b
+		s.VehicleSeat.MaxSpeed = math.clamp(b, 0, 300)
 	end
 end
 BoatSettingSection.CreateToggle(
@@ -14188,7 +14654,6 @@ BoatSettingSection.CreateToggle(
 		SaveSettings("Change Speed Boat", b)
 	end
 )
-
 RaceMain = Main.CreatePage({ Page_Name = "Upgrade Race", Page_Title = "Upgrade Race" })
 RaceDracoMain = Main.CreatePage({ Page_Name = "Race Draco", Page_Title = "Race Draco" })
 RaceDracoSection = RaceDracoMain.CreateSection("Race Draco")
@@ -19304,9 +19769,11 @@ function AutoCraftinMagnetVol()
 			return
 		end
 		if CheckCountItem("Scrap Metal", 10) and (CheckCountItem("Blaze Ember", 15)) then
+			if not Settings["Ignore Craft Volcanic Magnet"] then
 			game:GetService("ReplicatedStorage").Modules.Net
 				:FindFirstChild("RF/Craft")
 				:InvokeServer(unpack({ [1] = "Craft", [2] = "Volcanic Magnet", [3] = 1, [4] = {} }))
+		end
 			wait(2)
 		end
 	else
@@ -20557,15 +21024,15 @@ require(game:GetService("ReplicatedStorage").Modules.CombatUtil).GetTargetPositi
 end
 MISCPVPSection = PvpTab.CreateSection("MISC PVP")
 MISCPVPSection.CreateSlider(
-	{ Title = "Input WalkSpeed", Min = 0, Max = 300, Default = Settings["Input WalkSpeed"] or 200, Precise = true },
+	{ Title = "Input WalkSpeed", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input WalkSpeed"]) or 200, 220), Precise = true },
 	function(b)
-		SaveSettings("Input WalkSpeed", b)
+		SaveSettings("Input WalkSpeed", math.clamp(tonumber(b) or 0, 0, 220))
 	end
 )
 MISCPVPSection.CreateSlider(
-	{ Title = "Input JumpPower", Min = 0, Max = 500, Default = Settings["Input JumpPower"] or 200, Precise = true },
+	{ Title = "Input JumpPower", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input JumpPower"]) or 200, 220), Precise = true },
 	function(b)
-		SaveSettings("Input JumpPower", b)
+		SaveSettings("Input JumpPower", math.clamp(tonumber(b) or 0, 0, 220))
 	end
 )
 MISCPVPSection.CreateToggle(
@@ -20578,7 +21045,7 @@ MISCPVPSection.CreateToggle(
 			if Humanoid then
 				Humanoid.UseJumpPower = true
 				if b then
-					Humanoid.JumpPower = tonumber(Settings["Input JumpPower"]) or 50
+					Humanoid.JumpPower = math.clamp(tonumber(Settings["Input JumpPower"]) or 50, 0, 220)
 				else
 					Humanoid.JumpPower = 50
 				end
@@ -20594,8 +21061,9 @@ MISCPVPSection.CreateToggle(
 			local Character = t.Character
 			local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
 			if Humanoid then
+				local speed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
 				if b then
-					Humanoid.WalkSpeed = tonumber(Settings["Input WalkSpeed"]) or 16
+					Humanoid.WalkSpeed = speed
 				else
 					Humanoid.WalkSpeed = 16
 				end
@@ -21409,42 +21877,55 @@ if not getgenv().BananaCatMainLoop then
 				end
 			end
 		end)
-		task.spawn(function()
-			while task.wait(0.15) do
-				local Character = t.Character
-				local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-				if Humanoid then
-					pcall(function()
-						Humanoid.UseJumpPower = true
-						if Settings["Change WalkSpeed"] then
-							Humanoid.WalkSpeed = tonumber(Settings["Input WalkSpeed"]) or 16
-						end
-						if Settings["Change JumpPower"] then
-							Humanoid.JumpPower = tonumber(Settings["Input JumpPower"]) or 50
-						end
-					end)
-				end
-			end
-		end)
+		local function ApplyMovementSettings()
+	local Character = t.Character
+	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+	if not Humanoid then return end
+
+	pcall(function()
+		if Settings["Change WalkSpeed"] then
+			Humanoid.WalkSpeed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
+		else
+			Humanoid.WalkSpeed = 16
+		end
+
+		Humanoid.UseJumpPower = true
+		if Settings["Change JumpPower"] then
+			Humanoid.JumpPower = math.clamp(tonumber(Settings["Input JumpPower"]) or 50, 0, 220)
+		else
+			Humanoid.JumpPower = 50
+		end
+	end)
+end
+
+ApplyMovementSettings()
+if t.CharacterAdded then
+	t.CharacterAdded:Connect(function()
+		task.wait(0.25)
+		ApplyMovementSettings()
+	end)
+end
+
+task.spawn(function()
+	while task.wait(0.15) do
+		ApplyMovementSettings()
+	end
+end)
 		if tick() - lastFruitTick >= 0.5 then
 			lastFruitTick = tick()
 			local T, T = pcall(function()
 				if Settings["Random Devil Fruit"] then
-					if
-						not game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow")
-						or not game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow").Enabled
-					then
+					local playerGui = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
+					local spinnerWindow = playerGui and playerGui:FindFirstChild("SpinnerWindow")
+					if not spinnerWindow or not spinnerWindow.Enabled then
 						RandomFruit()
-					elseif
-						game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SpinnerWindow").Enabled
-						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow:FindFirstChild("AboveSpinner")
-						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow.AboveSpinner:FindFirstChild("Navigation")
-						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow.AboveSpinner.Navigation:FindFirstChild("CloseButton")
-						and game:GetService("Players").LocalPlayer.PlayerGui.SpinnerWindow.AboveSpinner.Navigation.CloseButton.Visible
-					then
-						pcall(function()
-							Spinner:Close()
-						end)
+					else
+						local above = spinnerWindow:FindFirstChild("AboveSpinner")
+						local navigation = above and above:FindFirstChild("Navigation")
+						local closeButton = navigation and navigation:FindFirstChild("CloseButton")
+						if closeButton and closeButton.Visible then
+							pcall(function() Spinner:Close() end)
+						end
 					end
 				end
 				if Settings["Auto Trade Bone"] then
@@ -21895,10 +22376,10 @@ end
 function SelectPlayerPVP(...)local __args = {...};local b = __args[1];return function()for Z,Z in b[1](game:GetService("Players"):GetChildren())do if Z.Name==Settings["Select Player PVP"]then return Z;end;end;end;end
 
 -- TARGET-V14 FUNCTION: SetSpeedBoatMaxSpeed (source-recovery line 1483)
-function SetSpeedBoatMaxSpeed()local Z,F=b[1](Settings["Value Speed Boat"])or 200,checkSpeedboat();if F then F.VehicleSeat.MaxSpeed=Z;end;end
+function SetSpeedBoatMaxSpeed()local Z,F=b[1](Settings["Value Speed Boat"])or 300,checkSpeedboat();Z=math.clamp(Z,0,300);if F then F.VehicleSeat.MaxSpeed=Z;end;end
 
 -- TARGET-V14 FUNCTION: SetSpeedBoatMaxSpeedFactory (source-recovery line 1480)
-function SetSpeedBoatMaxSpeedFactory(...)local __args = {...};local b = __args[1];local Z = __args[5];return function()local Z,F=b[1](Settings["Value Speed Boat"])or 200,checkSpeedboat();if F then F.VehicleSeat.MaxSpeed=Z;end;end;end
+function SetSpeedBoatMaxSpeedFactory(...)local __args = {...};local b = __args[1];local Z = __args[5];return function()local Z,F=b[1](Settings["Value Speed Boat"])or 300,checkSpeedboat();Z=math.clamp(Z,0,300);if F then F.VehicleSeat.MaxSpeed=Z;end;end;end
 
 -- TARGET-V14 FUNCTION: Speed_Boat_Auto_Drive (source-recovery line 223)
 function Speed_Boat_Auto_Drive(...)local __args = {...};local b = __args[1];local Z = __args[5];return function()for Z,F in b[1](b[2])do while _G.autoDrive and(task.wait())do local c=checkboatFind();if not c then return;end;Z=b[3][7][b[3][6]](c,F);if(c.PrimaryPart.Position-F).Magnitude<10 then c.PrimaryPart.ThrottleFloat=0;c.PrimaryPart.Throttle=0;break;end;spawn(function()c.VehicleSeat.MaxSpeed=Settings["Speed Boat Auto Drive"]or 300;NoclipBoat(c);end);if math.abs(Z)>5 then b[4][7][b[4][6]](c,F);c.PrimaryPart.ThrottleFloat=0;c.PrimaryPart.Throttle=0;else c.PrimaryPart.ThrottleFloat=1;c.PrimaryPart.Throttle=1;end;end;end;end;end
@@ -22042,8 +22523,8 @@ end
 
 -- [BANANA CAT RECOVERED] CollectCombatTargetsFactory
 
--- [PASS31 SOURCE BODY] BypassTp (legacy helper; keep the active BypassTp table above intact)
-function BypassTpLegacy(target)
+-- [PASS31 SOURCE BODY] BypassTp
+function BypassTp(target)
     if not target then
         return nil
     end
