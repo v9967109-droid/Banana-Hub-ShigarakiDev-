@@ -6626,14 +6626,8 @@ SettingAutoFarmSection.CreateToggle(
 )
 local o = SettingAutoFarmSection.CreateLabel({ Title = "Auto Quest only accepts the quest. Farm toggles only kill mobs." })
 SettingAutoFarmSection.CreateToggle(
-	{ Title = "Auto Quest", Desc = "Automatic: turns ON by itself when a Farm is active and there is no quest, turns OFF when the quest is accepted, turns ON again when it is completed.", Default = Settings["Auto Quest [Katakuri/Bone/Tyrant]"] or false },
+	{ Title = "Auto Quest", Desc = "Only accepts the quest of the selected farm (Level/Bones/Katakuri/Tyrant).", Default = Settings["Auto Quest [Katakuri/Bone/Tyrant]"] or false },
 	function(V)
-		-- Mudança automática (feita pelo gerenciador): só atualiza o valor,
-		-- sem SaveSettings(false) para não cancelar o tween do farm.
-		if (getgenv().__AutoQuestInternalUntil or 0) > tick() then
-			Settings["Auto Quest [Katakuri/Bone/Tyrant]"] = V
-			return
-		end
 		SaveSettings("Auto Quest [Katakuri/Bone/Tyrant]", V)
 	end
 )
@@ -7436,19 +7430,6 @@ function FarmMethod()
 	local QuestVisible = AQIsQuestActive()
 	local IsSpecialFarm = SelectedFarmMethod == "Farm Katakuri" or SelectedFarmMethod == "Farm Bones" or SelectedFarmMethod == "Farm Tyrant of the Skies"
 
-	-- Aviso ao Auto Quest: missão concluída (ou sumiu) -> libera a trava agora,
-	-- sem esperar, para o Auto Quest ligar e pegar a próxima missão.
-	if
-		SelectedFarmMethod ~= "Aura Farm"
-		and not Settings["Farm Material"]
-		and (SelectedFarmMethod == "Level Farm" or t.Data.Level.Value >= C)
-		and (not QuestVisible)
-	then
-		local st = getgenv().__AQState
-		if st and st.locked then
-			st.request = true
-		end
-	end
 	-- Se a missão atual já terminou, não mantém o alvo antigo.
 	-- Aguarda a interface da quest fechar e o próximo ciclo assume a nova quest.
 	-- Auto Quest owns the character only while there is no active quest
@@ -7684,15 +7665,11 @@ function AQIsQuestActive()
 	return true
 end
 
--- Trava de missão: depois de aceitar, NÃO aceita de novo até a missão ser concluída.
-getgenv().__AQState = getgenv().__AQState or { locked = false, seen = false, since = 0, goneSince = nil }
+getgenv().__AQState = getgenv().__AQState or { doneSince = nil }
 spawn(function()
 	while task.wait(0.3) do
 		pcall(function()
 			if not Settings["Auto Quest [Katakuri/Bone/Tyrant]"] then
-				return
-			end
-			if getgenv().__AQState.locked then
 				return
 			end
 			if Settings["Farm Mastery"] and Settings["Start Farm"] then
@@ -7703,97 +7680,11 @@ spawn(function()
 			end
 			local sel = GetSelectedIndividualFarm()
 			local info = sel and AutoQuestInfo[sel]
-			local root = t.Character and t.Character:FindFirstChild("HumanoidRootPart")
-			-- Só considera "tentou aceitar" quando está junto do NPC (senão está apenas andando até ele).
-			local nearNPC = false
-			if root then
-				local npcPos
-				if info and t.Data.Level.Value >= info[1] then
-					local cf = getgenv().questpoint and getgenv().questpoint[info[2]]
-					npcPos = cf and cf.Position
-				elseif sel == "Auto Farm Level" then
-					local okI, qi = pcall(GetLevelQuestInfo, t.Data.Level.Value)
-					if okI and type(qi) == "table" and qi.Pos then
-						npcPos = typeof(qi.Pos) == "CFrame" and qi.Pos.Position or qi.Pos
-					end
-				end
-				nearNPC = npcPos ~= nil and (npcPos - root.Position).Magnitude <= 8
-			end
-			if AQIsQuestActive() then
-				return
-			end
 			if info and t.Data.Level.Value >= info[1] then
 				QuestBoneAndkatakuri(info[2], info[3])
 			elseif sel == "Auto Farm Level" then
 				TakeQuestLevel()
 			end
-			if nearNPC then
-				-- Espera a missão registrar e trava para não aceitar outra vez.
-				local function registered()
-					return AQIsQuestActive()
-				end
-				local deadline = tick() + 3
-				repeat task.wait(0.1) until registered() or tick() > deadline
-				if registered() then
-					local st = getgenv().__AQState
-					st.locked, st.seen, st.since, st.goneSince = true, true, tick(), nil
-				end
-			end
-		end)
-	end
-end)
-
--- Auto Quest automático: liga quando há Farm ativo sem missão, desliga ao aceitar,
--- liga de novo quando a missão é concluída, e desliga quando nenhum Farm está ativo.
-spawn(function()
-	-- locals dentro da função para não consumir o limite de locals do chunk principal
-	local AQ_KEY = "Auto Quest [Katakuri/Bone/Tyrant]"
-	local function SetAutoQuest(v)
-		v = v and true or false
-		if Settings[AQ_KEY] == v then
-			return
-		end
-		getgenv().__AutoQuestInternalUntil = tick() + 0.5
-		Settings[AQ_KEY] = v
-		pcall(function()
-			local opt = Options and Options["Auto Quest"]
-			if opt and opt.FunctionCreate and opt.FunctionCreate.SetValue then
-				opt.FunctionCreate:SetValue(v)
-			end
-		end)
-	end
-	while task.wait(0.25) do
-		pcall(function()
-			local sel = GetSelectedIndividualFarm()
-			local masteryOn = Settings["Farm Mastery"] and Settings["Start Farm"]
-			local needsQuest = sel ~= nil and sel ~= "Aura Farm" and not masteryOn and not Settings["Farm Material"]
-			local st = getgenv().__AQState
-			if not needsQuest then
-				st.locked, st.seen, st.goneSince = false, false, nil
-				SetAutoQuest(false)
-				return
-			end
-			local questActive = AQIsQuestActive()
-			if st.request then
-				st.request = false
-				if st.locked and not questActive then
-					st.locked, st.seen, st.goneSince = false, false, nil
-				end
-			end
-			if st.locked then
-				if questActive then
-					st.seen, st.goneSince = true, nil
-				elseif st.seen then
-					-- missão sumiu/concluiu: confirma por 1s antes de liberar a próxima
-					st.goneSince = st.goneSince or tick()
-					if tick() - st.goneSince >= 1 then
-						st.locked, st.seen, st.goneSince = false, false, nil
-					end
-				elseif tick() - st.since > 8 then
-					st.locked = false
-				end
-			end
-			SetAutoQuest(not questActive and not st.locked)
 		end)
 	end
 end)
@@ -11475,6 +11366,11 @@ local function IsFruitTool(tool)
 	if tool:FindFirstChild("Ignored") then
 		return false
 	end
+	-- Falhou ao guardar há pouco: tenta de novo só depois de 30s (antes nunca mais tentava).
+	local failedAt = tool:GetAttribute("__StoreFail")
+	if typeof(failedAt) == "number" and tick() - failedAt < 30 then
+		return false
+	end
 
 	local original = tool:GetAttribute("OriginalName")
 	local name = tool.Name
@@ -11504,16 +11400,15 @@ function StoreFruit(container)
 					CommF:InvokeServer("StoreFruit", fruitName, tool)
 				end)
 
-				if ok and tool.Parent then
-					local ignored = tool:FindFirstChild("Ignored")
-					if not ignored then
-						ignored = Instance.new("IntValue")
-						ignored.Name = "Ignored"
-						ignored.Parent = tool
-					end
+				task.wait(0.3)
+				local stored = ok and (not tool.Parent)
+				if not stored then
+					pcall(function()
+						tool:SetAttribute("__StoreFail", tick())
+					end)
 				end
 
-				if Settings["Webhook Store Fruit"] and Settings["Select Rarity Fruit"] then
+				if stored and Settings["Webhook Store Fruit"] and Settings["Select Rarity Fruit"] then
 					local rarityName
 					pcall(function()
 						local info = FruitInfoModule.List[fruitName]
@@ -21882,6 +21777,42 @@ runAsync = require(game.ReplicatedStorage.Util.runAsync)
 Spinner = require(game:GetService("ReplicatedStorage").Controllers.UI.Spinner)
 SharedGachaUtil = require(game.ReplicatedStorage.Modules.Gacha.SharedGachaUtil)
 TextUtil = require(game.ReplicatedStorage.Modules.Util.TextUtil)
+-- Movimento: movido para fora do RenderStepped (antes criava um loop novo a cada frame).
+function ApplyMovementSettings()
+	local Character = t.Character
+	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+	if not Humanoid then return end
+
+	pcall(function()
+		if Settings["Change WalkSpeed"] then
+			Humanoid.WalkSpeed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
+		else
+			Humanoid.WalkSpeed = 16
+		end
+
+		Humanoid.UseJumpPower = true
+		if Settings["Change JumpPower"] then
+			Humanoid.JumpPower = math.clamp(tonumber(Settings["Input JumpPower"]) or 50, 0, 220)
+		else
+			Humanoid.JumpPower = 50
+		end
+	end)
+end
+
+ApplyMovementSettings()
+if t.CharacterAdded then
+	t.CharacterAdded:Connect(function()
+		task.wait(0.25)
+		ApplyMovementSettings()
+	end)
+end
+
+task.spawn(function()
+	while task.wait(0.15) do
+		ApplyMovementSettings()
+	end
+end)
+
 if not getgenv().BananaCatMainLoop then
 	getgenv().BananaCatMainLoop = true
 	lastHopTick = tick()
@@ -21926,42 +21857,13 @@ if not getgenv().BananaCatMainLoop then
 				end
 			end
 		end)
-		local function ApplyMovementSettings()
-	local Character = t.Character
-	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-	if not Humanoid then return end
-
-	pcall(function()
-		if Settings["Change WalkSpeed"] then
-			Humanoid.WalkSpeed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
-		else
-			Humanoid.WalkSpeed = 16
+		-- Segurança: se uma chamada de fruta travar, libera depois de 30s.
+		if getgenv().__FruitBusy and tick() - lastFruitTick > 30 then
+			getgenv().__FruitBusy = false
 		end
-
-		Humanoid.UseJumpPower = true
-		if Settings["Change JumpPower"] then
-			Humanoid.JumpPower = math.clamp(tonumber(Settings["Input JumpPower"]) or 50, 0, 220)
-		else
-			Humanoid.JumpPower = 50
-		end
-	end)
-end
-
-ApplyMovementSettings()
-if t.CharacterAdded then
-	t.CharacterAdded:Connect(function()
-		task.wait(0.25)
-		ApplyMovementSettings()
-	end)
-end
-
-task.spawn(function()
-	while task.wait(0.15) do
-		ApplyMovementSettings()
-	end
-end)
-		if tick() - lastFruitTick >= 0.5 then
+		if tick() - lastFruitTick >= 0.5 and not getgenv().__FruitBusy then
 			lastFruitTick = tick()
+			getgenv().__FruitBusy = true
 			local T, T = pcall(function()
 				if Settings["Random Devil Fruit"] then
 					local playerGui = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
@@ -22009,6 +21911,7 @@ end)
 					end
 				end
 			end)
+			getgenv().__FruitBusy = false
 		end
 	end)
 end
