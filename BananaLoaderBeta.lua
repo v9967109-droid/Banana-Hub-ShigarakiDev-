@@ -5748,54 +5748,81 @@ v_u_52 = time
 v_u_53 = v_u_52()
 local function m(E, l, Q)
 	local d = t.Character
-	local I = d and (d.PrimaryPart or (d:FindFirstChild("HumanoidRootPart")))
+	local I = d and (d.PrimaryPart or d:FindFirstChild("HumanoidRootPart"))
 	if not I or not E then
 		return false
 	end
-	local _ = Q and E.Position or (E.PrimaryPart and E.PrimaryPart.Position) or (E:FindFirstChild("HumanoidRootPart") and E.HumanoidRootPart.Position)
-	if not _ then
+	-- Posição do alvo: aceita Vector3, CFrame, Part ou Model (antes dava erro com Part).
+	local function GetPos(T)
+		local ty = typeof(T)
+		if ty == "Vector3" then
+			return T
+		elseif ty == "CFrame" then
+			return T.Position
+		elseif ty == "Instance" then
+			if T:IsA("BasePart") then
+				return T.Position
+			elseif T:IsA("Model") then
+				local r = T:FindFirstChild("HumanoidRootPart") or T.PrimaryPart
+				return r and r.Position or T:GetPivot().Position
+			end
+		end
+	end
+	local TargetPos = GetPos(E)
+	if not TargetPos then
 		return false
 	end
-	local HitPosition = _
-	if g and g.Hit and g.Hit.Position then
-		HitPosition = g.Hit.Position
-	end
-	local Direction = (HitPosition - I.Position)
-	if Direction.Magnitude < 0.001 then
-		Direction = Vector3.new(0, 0, -1)
-	else
-		Direction = Direction.Unit
-	end
-	local o, V, N =
-		(_ - I.Position).Unit, (Direction * Vector3.new(1, 0, 1)).Unit, NameWeapon("Blox Fruit")
-	I = N and (d:FindFirstChild(N))
-	if not I then
-		return false
-	end
-	d, E, Q = I:FindFirstChild("LeftClickRemote"), I:FindFirstChild("RemoteFunction"), I:FindFirstChild("RemoteEvent")
-	if not d and E then
-		if Q then
-			Q:FireServer(_)
+	local ok, result = pcall(function()
+		local ToTarget = TargetPos - I.Position
+		local Aim = ToTarget.Magnitude < 0.001 and Vector3.new(0, 0, -1) or ToTarget.Unit
+		local Flat = Vector3.new(Aim.X, 0, Aim.Z)
+		Flat = Flat.Magnitude < 0.001 and Vector3.new(0, 0, -1) or Flat.Unit
+
+		local toolName = NameWeapon("Blox Fruit")
+		if not toolName then
+			return false
 		end
-		E:InvokeServer("TAP")
-		return true
-	end
-	if d and N == "Mammoth-Mammoth" then
-		d:FireServer(_)
-		return true
-	end
-	if d then
-		v_u_51 += 1
-		if v_u_51 > 5 then
-			v_u_51 = 1
+		local tool = d:FindFirstChild(toolName)
+		if not tool then
+			-- Fruta ainda na mochila: equipa e tenta no próximo ciclo.
+			local bp = t.Backpack:FindFirstChild(toolName)
+			local hum = d:FindFirstChildOfClass("Humanoid")
+			if bp and hum then
+				hum:EquipTool(bp)
+			end
+			return false
 		end
-		d:FireServer(o, v_u_51)
-		if l then
-			d:FireServer(V, v_u_51)
+
+		local ClickRemote = tool:FindFirstChild("LeftClickRemote")
+		local RemoteFn = tool:FindFirstChild("RemoteFunction")
+		local RemoteEv = tool:FindFirstChild("RemoteEvent")
+		if not ClickRemote and RemoteFn then
+			if RemoteEv then
+				RemoteEv:FireServer(TargetPos)
+			end
+			RemoteFn:InvokeServer("TAP")
+			return true
 		end
+		if ClickRemote and toolName == "Mammoth-Mammoth" then
+			ClickRemote:FireServer(TargetPos)
+			return true
+		end
+		if ClickRemote then
+			getgenv().__FruitCombo = (getgenv().__FruitCombo or 0) + 1
+			if getgenv().__FruitCombo > 5 then
+				getgenv().__FruitCombo = 1
+			end
+			ClickRemote:FireServer(Aim, getgenv().__FruitCombo)
+			if l then
+				ClickRemote:FireServer(Flat, getgenv().__FruitCombo)
+			end
+			return true
+		end
+		-- Último recurso: ativa a tool como um clique normal.
+		tool:Activate()
 		return true
-	end
-	return false
+	end)
+	return ok and result == true
 end
 getgenv().UseFruitM1 = function(g, E)
 	return m(g, E, false)
@@ -5881,34 +5908,47 @@ getgenv().ClickM1Volcano = function(E, l)
 end
 local m = L:WaitForChild("Modules")
 getgenv().SpamGunDragonStorm = function(E)
-	local l, Q = require(m.CombatUtil), t.Character
+	local Q = t.Character
 	local d = Q and (Q:FindFirstChild("Dragonstorm"))
-	if not d or not E or not E.Position or (l:IsGunReloading(d)) then
+	if not d or not E or not E.Position then
 		return
 	end
-	l = getupvalues(require(L.Controllers.CombatController).Attack)[9]
-	local I, _, o, V, N, y, P =
-		debug.getupvalue(l, 15),
-		debug.getupvalue(l, 13),
-		debug.getupvalue(l, 16),
-		debug.getupvalue(l, 17),
-		debug.getupvalue(l, 14),
-		debug.getupvalue(l, 12),
-		debug.getupvalue(l, 18)
-	Q = y * _
-	d = ((N * _ + y * I) % o * o + Q) % V
-	N = math.floor(d / o)
-	y = d - N * o
-	P += 1
-	debug.setupvalue(l, 15, I)
-	debug.setupvalue(l, 13, _)
-	debug.setupvalue(l, 16, o)
-	debug.setupvalue(l, 17, V)
-	debug.setupvalue(l, 14, N)
-	debug.setupvalue(l, 12, y)
-	debug.setupvalue(l, 18, P)
-	L.Remotes.Validator2:FireServer(math.floor(d / V * 16777215), P)
-	m.Net:FindFirstChild("RE/ShootGunEvent"):FireServer(E.Position, { E })
+	local reloading = false
+	pcall(function()
+		reloading = require(m.CombatUtil):IsGunReloading(d)
+	end)
+	if reloading then
+		return
+	end
+	-- Validação do jogo: depende de índices de upvalue que mudam a cada update.
+	-- Antes um erro aqui impedia o tiro; agora é tentativa protegida e o tiro sai de qualquer forma.
+	pcall(function()
+		local l = getupvalues(require(L.Controllers.CombatController).Attack)[9]
+		local I, _, o, V, N, y, P =
+			debug.getupvalue(l, 15),
+			debug.getupvalue(l, 13),
+			debug.getupvalue(l, 16),
+			debug.getupvalue(l, 17),
+			debug.getupvalue(l, 14),
+			debug.getupvalue(l, 12),
+			debug.getupvalue(l, 18)
+		local Q2 = y * _
+		local d2 = ((N * _ + y * I) % o * o + Q2) % V
+		N = math.floor(d2 / o)
+		y = d2 - N * o
+		P += 1
+		debug.setupvalue(l, 15, I)
+		debug.setupvalue(l, 13, _)
+		debug.setupvalue(l, 16, o)
+		debug.setupvalue(l, 17, V)
+		debug.setupvalue(l, 14, N)
+		debug.setupvalue(l, 12, y)
+		debug.setupvalue(l, 18, P)
+		L.Remotes.Validator2:FireServer(math.floor(d2 / V * 16777215), P)
+	end)
+	pcall(function()
+		m.Net:FindFirstChild("RE/ShootGunEvent"):FireServer(E.Position, { E })
+	end)
 end
 function ShootM1(E)
 	spawn(function()
@@ -6153,76 +6193,48 @@ function BringMob(Q)
 	if not Settings["Bring Mob"] then
 		return
 	end
-	if Q and E ~= Q then
-		E = Q
-		l = DetectPartMobBring(Q.Name, Q, true).CFrame
-		local d = game:GetService("Players").LocalPlayer.Data.Race.Value == "Cyborg"
-			and (t.Character:FindFirstChild("RaceTransformed"))
-			and t.Character.RaceTransformed.Value
-		if d then
-			l = getcenter(Q.Name)
-		end
-		DeleteIgnoredMob()
-	end
-	if DaBringMob then
-		delay(0.1, function()
-			getgenv().DaBringMob = false
-		end)
+	if not Q or not Q.Parent or not Q:FindFirstChild("HumanoidRootPart") then
 		return
 	end
-	local d = {}
-	if not Q:FindFirstChild("Ignored") then
-		table.insert(d, Q)
+	local Character = t.Character
+	local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+	if not Root then
+		return
 	end
-	local I = Settings["Bring Mob Count"] or 2
-	local _, o = if I > 2 then 350 else 200
-	if
-		game:GetService("Players").LocalPlayer.Data.Race.Value == "Cyborg"
-		and (t.Character:FindFirstChild("RaceTransformed"))
-		and t.Character.RaceTransformed.Value
-	then
-		_, o = 300, 6
-	else
-		o = I
+	-- Limita a frequência (a cada chamada de farm não precisa reunir de novo).
+	if tick() - (getgenv().__BringLast or 0) < 0.12 then
+		return
 	end
-	for I, I in pairs(workspace.Enemies:GetChildren()) do
-		if
-			I ~= Q
-			and I.Name == Q.Name
-			and not I:FindFirstChild("Ignored")
-			and (IsMobAlive(I))
-			and (isnetworkowner2(I.HumanoidRootPart))
-		then
-			if (I.HumanoidRootPart.Position - l.Position).Magnitude <= _ and #d < o then
-				table.insert(d, I)
-			end
+	getgenv().__BringLast = tick()
+	-- Só reúne quando já está perto do mob alvo.
+	local anchor = Q.HumanoidRootPart.CFrame
+	if (Root.Position - anchor.Position).Magnitude > 120 then
+		return
+	end
+	-- Sem isso o servidor não aceita a posição dos mobs movidos pelo cliente.
+	pcall(function()
+		sethiddenproperty(t, "SimulationRadius", math.huge)
+		sethiddenproperty(t, "MaxSimulationRadius", math.huge)
+	end)
+	local count = math.clamp(tonumber(Settings["Bring Mob Count"]) or 2, 2, 6)
+	local radius = count > 2 and 350 or 250
+	local gathered = 1
+	for _, mob in ipairs(workspace.Enemies:GetChildren()) do
+		if gathered >= count then
+			break
 		end
-	end
-	if
-		l
-		and (t.Character.HumanoidRootPart.Position - Q.HumanoidRootPart.Position).Magnitude <= 50
-		and (isnetworkowner2(t.Character.HumanoidRootPart))
-		and #d >= 2
-	then
-		for Q, Q in pairs(d) do
-			sizepart(Q)
-			if not isnetworkowner2(Q.HumanoidRootPart) then
-				Q.HumanoidRootPart.CFrame = Q.WorldPivot
-				Instance.new("IntValue", Q).Name = "Ignored"
-				task.wait(0.3)
-			else
-				Q.HumanoidRootPart.CFrame = l * CFrame.new(0, math.random(0, 2), math.random(0, 2))
-				task.spawn(function()
-					local d = Q.Humanoid.Health
-					task.wait(2.2)
-					if Q.Humanoid.Health == d and not Q:FindFirstChild("Ignored") then
-						Q.HumanoidRootPart.CFrame = Q.WorldPivot
-						Instance.new("IntValue", Q).Name = "Ignored"
-						task.wait(0.3)
-					end
+		if mob ~= Q and mob.Name == Q.Name and not mob:FindFirstChild("Ignored") and IsMobAlive(mob) then
+			local hrp = mob.HumanoidRootPart
+			if (hrp.Position - anchor.Position).Magnitude <= radius then
+				hrp.CFrame = anchor * CFrame.new(math.random(-3, 3), 0, math.random(-3, 3))
+				hrp.CanCollide = false
+				pcall(function()
+					mob.Humanoid.WalkSpeed = 0
+					mob.Humanoid.JumpPower = 0
 				end)
+				sizepart(mob)
+				gathered += 1
 			end
-			getgenv().DaBringMob = true
 		end
 	end
 end
@@ -8385,8 +8397,10 @@ function GetNearestChest()
 end
 getgenv().DetectRaidCastle = false
 getgenv().ValueCollectChestSpawnGod = 0
+getgenv().__StackGen = (getgenv().__StackGen or 0) + 1
 task.spawn(function()
-	while task.wait() do
+	local MyStackGen = getgenv().__StackGen
+	while task.wait() and getgenv().__StackGen == MyStackGen do
 		local V, V = pcall(function()
 			if Settings["Auto New World"] then
 				if game.PlaceId == getgenv().CheckPlaceId3 and t.Data.Level.Value >= 700 then
@@ -8859,38 +8873,73 @@ task.spawn(function()
 			end
 			if Settings["Auto Elite Hunter"] then
 				local EliteRemote = game:GetService("ReplicatedStorage").Remotes.CommF_
-				local y = DetectEliteHunter()
-				if not y and tick() - (getgenv().__EliteReq or 0) > 6 then
-					-- Sem elite: pede a missão de Elite Hunter (é ela que faz o elite aparecer).
+				local EliteNames = { "Deandre", "Urban", "Diablo" }
+				-- Lê qual elite é o alvo da missão atual (pelo título da missão).
+				local function GetEliteQuestName()
+					local found
+					pcall(function()
+						local G = t.PlayerGui.Main.Quest
+						if G.Visible then
+							local txt = G.Container.QuestTitle.Title.Text
+							for _, n in ipairs(EliteNames) do
+								if string.find(txt, n, 1, true) then
+									found = n
+									break
+								end
+							end
+						end
+					end)
+					return found
+				end
+				-- Procura o elite da missão: primeiro no mapa (Enemies), depois no ReplicatedStorage.
+				local function FindEliteByName(n)
+					if not n then
+						return nil
+					end
+					local m = workspace.Enemies:FindFirstChild(n)
+					if m and m:IsA("Model") and IsMobAlive(m) then
+						return m
+					end
+					m = game:GetService("ReplicatedStorage"):FindFirstChild(n)
+					if m and m:IsA("Model") and IsMobAlive(m) then
+						return m
+					end
+				end
+				local questName = GetEliteQuestName()
+				if not questName and tick() - (getgenv().__EliteReq or 0) > 5 then
+					-- Sem missão de elite: pede uma (é ela que faz o elite aparecer).
 					getgenv().__EliteReq = tick()
 					pcall(function()
 						EliteRemote:InvokeServer("EliteHunter")
 					end)
-					task.wait(3)
-					y = DetectEliteHunter()
-		end
+					task.wait(2)
+					questName = GetEliteQuestName()
+				end
+				local y = FindEliteByName(questName)
+				if not y and not questName then
+					-- Título da missão não trouxe o nome: usa o elite detectado (mapa antes do ReplicatedStorage).
+					for _, n in ipairs(EliteNames) do
+						y = FindEliteByName(n)
+						if y then
+							break
+						end
+					end
+				end
 				if y then
 					StackFarm = false
 					StackFarmOther = false
-					-- Antes exigia o NOME do elite no título da missão; se o título não tiver o nome,
-					-- ele abandonava e pedia a missão para sempre sem nunca atacar.
-					-- Agora: garante que existe alguma missão (pede só se não houver) e VAI atrás do elite.
-					local hasQuest = false
-					pcall(function()
-						hasQuest = AQIsQuestActive() == true
-					end)
-					if not hasQuest and tick() - (getgenv().__EliteReq or 0) > 4 then
-						getgenv().__EliteReq = tick()
-						pcall(function()
-							EliteRemote:InvokeServer("EliteHunter")
-						end)
-					end
-					do
-						repeat
-							task.wait()
-							if not y.Parent or not y:FindFirstChild("HumanoidRootPart") then
+					getgenv().__EliteLost = nil
+					local engagedName = y.Name
+					repeat
+						task.wait()
+						-- O elite pode trocar de instância (ReplicatedStorage -> mapa) ao chegar perto.
+						if not y.Parent or not y:FindFirstChild("HumanoidRootPart") then
+							y = FindEliteByName(engagedName)
+							if not y then
 								break
 							end
+						end
+						if y.Parent == workspace.Enemies then
 							sizepart(y)
 							if Settings["Select Weapon"] == "Blox Fruit" then
 								toTarget(y.HumanoidRootPart.CFrame * CFrame.new(-7, 20, 0))
@@ -8899,15 +8948,23 @@ task.spawn(function()
 							end
 							ClickM1(y)
 							UsedualFlock()
-						until not IsMobAlive(y) or not Settings["Auto Elite Hunter"]
-						if getgenv().QuestTrainer and getgenv().QuestTrainer.CountKillMob then
-							getgenv().QuestTrainer.CountKillMob = getgenv().QuestTrainer.CountKillMob + 1
+						else
+							-- Ainda não carregou no mapa: voa até a posição do elite.
+							toTarget(y.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
 						end
+					until not Settings["Auto Elite Hunter"] or not IsMobAlive(y) and not FindEliteByName(engagedName)
+					if not IsMobAlive(y) and getgenv().QuestTrainer and getgenv().QuestTrainer.CountKillMob then
+						getgenv().QuestTrainer.CountKillMob = getgenv().QuestTrainer.CountKillMob + 1
 					end
 					return
 				elseif Settings["Hop Server Elite Hunter"] then
 					if not DetectItemPlr("God's Chalice") then
-						HopServer()
+						-- Só troca de servidor depois de pedir a missão e o elite não aparecer.
+						getgenv().__EliteLost = getgenv().__EliteLost or tick()
+						if tick() - getgenv().__EliteLost >= 8 then
+							getgenv().__EliteLost = nil
+							HopServer()
+						end
 					else
 						toTarget(CFrame.new(-12463.8740234375, 374.9144592285156, -7523.77392578125))
 					end
@@ -21043,6 +21100,11 @@ MISCPVPSection.CreateSlider(
 	{ Title = "Input WalkSpeed", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input WalkSpeed"]) or 16, 220), Precise = true },
 	function(b)
 		SaveSettings("Input WalkSpeed", math.clamp(tonumber(b) or 0, 0, 220))
+		pcall(function()
+			if ApplyMovementSettings then
+				ApplyMovementSettings()
+			end
+		end)
 	end
 )
 MISCPVPSection.CreateSlider(
@@ -21896,6 +21958,28 @@ function ApplyMovementSettings()
 end
 
 ApplyMovementSettings()
+-- Aplica a velocidade do slider a cada passo de física (depois do RenderStepped do jogo,
+-- que reescrevia o WalkSpeed). Só a execução mais recente fica ativa.
+pcall(function()
+	if getgenv().__MoveStepConn then
+		getgenv().__MoveStepConn:Disconnect()
+	end
+end)
+getgenv().__MoveStepConn = game:GetService("RunService").Stepped:Connect(function()
+	if getgenv().__MoveGen ~= MoveGen then
+		return
+	end
+	if Settings["Change WalkSpeed"] then
+		local Character = t.Character
+		local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+		if Humanoid then
+			local sp = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
+			if Humanoid.WalkSpeed ~= sp then
+				Humanoid.WalkSpeed = sp
+			end
+		end
+	end
+end)
 pcall(function()
 	if getgenv().__MoveCharConn then
 		getgenv().__MoveCharConn:Disconnect()
