@@ -5746,13 +5746,14 @@ v_u_50 = nil
 v_u_51 = 1
 v_u_52 = time
 v_u_53 = v_u_52()
+local FruitM1State = { Tool = nil, Combo = 0, LastFire = 0, LastCombo = 0 }
 local function m(E, l, Q)
 	local d = t.Character
 	local I = d and (d.PrimaryPart or d:FindFirstChild("HumanoidRootPart"))
 	if not I or not E then
 		return false
 	end
-	-- Posição do alvo: aceita Vector3, CFrame, Part ou Model (antes dava erro com Part).
+	-- Target position: accepts Vector3, CFrame, Part or Model.
 	local function GetPos(T)
 		local ty = typeof(T)
 		if ty == "Vector3" then
@@ -5773,18 +5774,13 @@ local function m(E, l, Q)
 		return false
 	end
 	local ok, result = pcall(function()
-		local ToTarget = TargetPos - I.Position
-		local Aim = ToTarget.Magnitude < 0.001 and Vector3.new(0, 0, -1) or ToTarget.Unit
-		local Flat = Vector3.new(Aim.X, 0, Aim.Z)
-		Flat = Flat.Magnitude < 0.001 and Vector3.new(0, 0, -1) or Flat.Unit
-
 		local toolName = NameWeapon("Blox Fruit")
 		if not toolName then
 			return false
 		end
 		local tool = d:FindFirstChild(toolName)
 		if not tool then
-			-- Fruta ainda na mochila: equipa e tenta no próximo ciclo.
+			-- Fruit still in the backpack: equip it and fire on the next cycle.
 			local bp = t.Backpack:FindFirstChild(toolName)
 			local hum = d:FindFirstChildOfClass("Humanoid")
 			if bp and hum then
@@ -5792,33 +5788,68 @@ local function m(E, l, Q)
 			end
 			return false
 		end
+		-- Rate limit: fruits ignore faster clicks, so extra remotes only add lag/ban risk.
+		local now = os.clock()
+		local minDelay = getgenv().FruitM1Delay or 0.02
+		if FruitM1State.Tool == tool and now - FruitM1State.LastFire < minDelay then
+			return true -- already firing; do not fall back to melee
+		end
+		-- Combo counter restarts after a pause or when the fruit changes (like a real click).
+		if FruitM1State.Tool ~= tool or now - FruitM1State.LastFire > 1.2 then
+			FruitM1State.Combo = 0
+		end
+		FruitM1State.Tool = tool
+		FruitM1State.LastFire = now
+
+		-- Lead the aim using the target velocity, from the real firing point.
+		local origin = I.Position + Vector3.new(0, 1.5, 0)
+		local aimPoint = TargetPos
+		if typeof(E) == "Instance" then
+			local tr = E:IsA("Model") and (E:FindFirstChild("HumanoidRootPart") or E.PrimaryPart) or E
+			if tr and tr:IsA("BasePart") then
+				local okV, vel = pcall(function()
+					return tr.AssemblyLinearVelocity
+				end)
+				if okV and vel and vel.Magnitude < 120 then
+					aimPoint = TargetPos + vel * math.clamp((aimPoint - origin).Magnitude / 300, 0, 0.25)
+				end
+			end
+		end
+		local ToTarget = aimPoint - origin
+		local Aim = ToTarget.Magnitude < 0.001 and Vector3.new(0, 0, -1) or ToTarget.Unit
+		local Flat = Vector3.new(Aim.X, 0, Aim.Z)
+		Flat = Flat.Magnitude < 0.001 and Vector3.new(0, 0, -1) or Flat.Unit
+
+		-- Lets the aim hooks used by the hub's skills point at the same target.
+		getgenv().AimPos = CFrame.new(aimPoint)
 
 		local ClickRemote = tool:FindFirstChild("LeftClickRemote")
 		local RemoteFn = tool:FindFirstChild("RemoteFunction")
 		local RemoteEv = tool:FindFirstChild("RemoteEvent")
 		if not ClickRemote and RemoteFn then
 			if RemoteEv then
-				RemoteEv:FireServer(TargetPos)
+				RemoteEv:FireServer(aimPoint)
 			end
-			RemoteFn:InvokeServer("TAP")
+			task.spawn(function()
+				pcall(function()
+					RemoteFn:InvokeServer("TAP")
+				end)
+			end)
 			return true
 		end
 		if ClickRemote and toolName == "Mammoth-Mammoth" then
-			ClickRemote:FireServer(TargetPos)
+			ClickRemote:FireServer(aimPoint)
 			return true
 		end
 		if ClickRemote then
-			getgenv().__FruitCombo = (getgenv().__FruitCombo or 0) + 1
-			if getgenv().__FruitCombo > 5 then
-				getgenv().__FruitCombo = 1
-			end
-			ClickRemote:FireServer(Aim, getgenv().__FruitCombo)
+			FruitM1State.Combo = FruitM1State.Combo % 5 + 1
+			ClickRemote:FireServer(Aim, FruitM1State.Combo)
 			if l then
-				ClickRemote:FireServer(Flat, getgenv().__FruitCombo)
+				ClickRemote:FireServer(Flat, FruitM1State.Combo)
 			end
 			return true
 		end
-		-- Último recurso: ativa a tool como um clique normal.
+		-- Last resort: activate the tool like a normal click.
 		tool:Activate()
 		return true
 	end)
@@ -5881,6 +5912,12 @@ getgenv().ClickM1 = function(E, l)
 		if getgenv().UseFruitM1(E) then
 			return
 		end
+	elseif Settings["Select Weapon"] == "Gun" then
+		-- Gun M1: shoots instead of using the melee attack function.
+		if ShootM1(E) then
+			return
+		end
+		return
 	end
 	AttackFunction(l and 80 or 30)
 end
@@ -5950,78 +5987,103 @@ getgenv().SpamGunDragonStorm = function(E)
 		m.Net:FindFirstChild("RE/ShootGunEvent"):FireServer(E.Position, { E })
 	end)
 end
+local GunM1State = { Last = 0 }
 function ShootM1(E)
-	spawn(function()
-		if
-			not require(game:GetService("ReplicatedStorage").Modules.CombatUtil):IsGunReloading(
-				t.Character[NameWeapon("Gun")]
-			)
-		then
-			if NameWeapon("Gun") ~= "Skull Guitar" then
-				local l =
-					getupvalues(require(game:GetService("ReplicatedStorage").Controllers.CombatController).Attack)[9]
-				local Q, d, I, _, o, V, N =
-					debug.getupvalue(l, 15),
-					debug.getupvalue(l, 13),
-					debug.getupvalue(l, 16),
-					debug.getupvalue(l, 17),
-					debug.getupvalue(l, 14),
-					debug.getupvalue(l, 12),
-					debug.getupvalue(l, 18)
-				local y = V * d
-				local P = ((o * d + V * Q) % I * I + y) % _
-				o = math.floor(P / I)
-				V = P - o * I
-				N += 1
-				debug.setupvalue(l, 15, Q)
-				debug.setupvalue(l, 13, d)
-				debug.setupvalue(l, 16, I)
-				debug.setupvalue(l, 17, _)
-				debug.setupvalue(l, 14, o)
-				debug.setupvalue(l, 12, V)
-				debug.setupvalue(l, 18, N)
-				game.ReplicatedStorage.Remotes.Validator2:FireServer(math.floor(P / _ * 16777215), N)
-				if NameWeapon("Gun") == "Cannon" then
-					game:GetService("ReplicatedStorage").Modules.Net
-						:FindFirstChild("RE/ShootGunEvent")
-						:FireServer(unpack({ [1] = E }))
-				else
-					_ = { [1] = E.HumanoidRootPart.Position, [2] = { [1] = E.HumanoidRootPart } }
-					game:GetService("ReplicatedStorage").Modules.Net
-						:FindFirstChild("RE/ShootGunEvent")
-						:FireServer(unpack(_))
-				end
-				task.wait(t.Character[NameWeapon("Gun")].Cooldown.Value)
-			else
-				-- Skull Guitar: o alvo pode ser um vaso/Model sem HumanoidRootPart.
-				local character = game:GetService("Players").LocalPlayer.Character
-				local skull = character and character:FindFirstChild("Skull Guitar")
-				local remote = skull and skull:FindFirstChild("RemoteEvent")
-				local targetPosition
+	local char = t.Character
+	if not char or not E then
+		return false
+	end
+	local gunName = NameWeapon("Gun")
+	local gun = gunName and char:FindFirstChild(gunName)
+	if not gun then
+		-- Gun still in the backpack: equip it and shoot on the next cycle.
+		local bp = gunName and t.Backpack:FindFirstChild(gunName)
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if bp and hum then
+			hum:EquipTool(bp)
+		end
+		return false
+	end
+	-- Target part / position (accepts Model, BasePart, Vector3 or CFrame).
+	local targetPart, targetPos
+	if typeof(E) == "Instance" then
+		if E:IsA("BasePart") then
+			targetPart, targetPos = E, E.Position
+		elseif E:IsA("Model") then
+			targetPart = E:FindFirstChild("HumanoidRootPart") or E.PrimaryPart
+			targetPos = targetPart and targetPart.Position or E:GetPivot().Position
+		end
+	elseif typeof(E) == "Vector3" then
+		targetPos = E
+	elseif typeof(E) == "CFrame" then
+		targetPos = E.Position
+	end
+	if not targetPos then
+		return false
+	end
+	-- Throttle by the gun cooldown (a new thread per call used to pile up).
+	local cdObj = gun:FindFirstChild("Cooldown")
+	local cooldown = (cdObj and cdObj.Value or 0.3) * (getgenv().GunM1CooldownMult or 0.8)
+	local now = os.clock()
+	if now - GunM1State.Last < math.max(cooldown, 0.03) then
+		return true
+	end
+	local reloading = false
+	pcall(function()
+		reloading = require(game:GetService("ReplicatedStorage").Modules.CombatUtil):IsGunReloading(gun)
+	end)
+	if reloading then
+		return true
+	end
+	GunM1State.Last = now
+	getgenv().AimPos = CFrame.new(targetPos)
 
-				if typeof(E) == "Instance" then
-					if E:IsA("BasePart") then
-						targetPosition = E.Position
-					elseif E:IsA("Model") then
-						targetPosition = E:GetPivot().Position
-					elseif E:IsA("Attachment") then
-						targetPosition = E.WorldPosition
-					elseif E:FindFirstChild("HumanoidRootPart") then
-						targetPosition = E.HumanoidRootPart.Position
-					end
-				end
-
-				if remote and targetPosition then
-					remote:FireServer("TAP", targetPosition)
-					local tool = t.Character and t.Character:FindFirstChild(NameWeapon("Gun"))
-					local cooldown = tool and tool:FindFirstChild("Cooldown")
-					if cooldown then
-						task.wait(cooldown.Value)
-					end
-				end
-			end
+	if gunName == "Skull Guitar" then
+		local remote = gun:FindFirstChild("RemoteEvent")
+		if remote then
+			remote:FireServer("TAP", targetPos)
+		end
+		return true
+	end
+	-- The validator uses upvalue indexes that change on game updates. It is
+	-- protected now: a failure there no longer blocks the shot.
+	pcall(function()
+		local rs = game:GetService("ReplicatedStorage")
+		local l = getupvalues(require(rs.Controllers.CombatController).Attack)[9]
+		local Q, d, I, _, o, V, N =
+			debug.getupvalue(l, 15),
+			debug.getupvalue(l, 13),
+			debug.getupvalue(l, 16),
+			debug.getupvalue(l, 17),
+			debug.getupvalue(l, 14),
+			debug.getupvalue(l, 12),
+			debug.getupvalue(l, 18)
+		local y = V * d
+		local P = ((o * d + V * Q) % I * I + y) % _
+		o = math.floor(P / I)
+		V = P - o * I
+		N += 1
+		debug.setupvalue(l, 15, Q)
+		debug.setupvalue(l, 13, d)
+		debug.setupvalue(l, 16, I)
+		debug.setupvalue(l, 17, _)
+		debug.setupvalue(l, 14, o)
+		debug.setupvalue(l, 12, V)
+		debug.setupvalue(l, 18, N)
+		rs.Remotes.Validator2:FireServer(math.floor(P / _ * 16777215), N)
+	end)
+	pcall(function()
+		local shoot = game:GetService("ReplicatedStorage").Modules.Net:FindFirstChild("RE/ShootGunEvent")
+		if not shoot then
+			return
+		end
+		if gunName == "Cannon" then
+			shoot:FireServer(targetPos)
+		else
+			shoot:FireServer(targetPos, targetPart and { targetPart } or {})
 		end
 	end)
+	return true
 end
 getgenv().SpamGunSkullGuitar = function(E)
 	local l, Q = require(m.CombatUtil), t.Character
@@ -6246,7 +6308,7 @@ local Q, d =
 	SettingFarmMainSection.CreateDropdown(
 		{
 			Title = "Select Weapon",
-			List = { "Melee", "Sword", "Blox Fruit" },
+			List = { "Melee", "Sword", "Gun", "Blox Fruit" },
 			Search = true,
 			Selected = false,
 			Default = Settings["Select Weapon"] or nil,
