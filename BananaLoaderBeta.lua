@@ -3291,8 +3291,13 @@ function HopServer(R)
 			for l, Q in pairs((game:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer(E))) do
 				if l ~= game.JobId and not table.find(CheckJobIdServer(), l) then
 					game:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer("teleport", l)
-					writefile("Banana Cat Hub/Jobid.json", game:GetService("HttpService"):JSONEncode(K))
-					getgenv().limit_type("clearAll")
+					pcall(function()
+						writefile("Banana Cat Hub/Jobid.json", game:GetService("HttpService"):JSONEncode({ l }))
+					end)
+					pcall(function()
+						getgenv().limit_type("clearAll")
+					end)
+					return
 				end
 			end
 		end
@@ -6507,9 +6512,6 @@ SaveSettings("Speed Tween ", 220)
 SettingFarmMainSection.CreateLabel({
 	Title = "Speed Tween: 220",
 })
-SettingFarmMainSection.CreateLabel({
-	Title = "Recommended 220 | Maximum Speed",
-})
 SettingSkillMain =
 	Main.CreatePage({ Page_Name = "Hold and Select Skill", Page_Title = "Setting Hold and Select Skill" })
 SelectSkillsSection = SettingSkillMain.CreateSection("Select Skills")
@@ -6561,7 +6563,7 @@ _("Sword", { "Z", "X" })
 _("Gun", { "Z", "X" })
 _("Blox Fruit", { "Z", "X", "C", "V", "F" })
 FarmMain = Main.CreatePage({ Page_Name = "Farming", Page_Title = "Farming" })
-SettingAutoFarmSection = FarmMain.CreateSection("Setting Farm")
+SettingAutoFarmSection = FarmMain.CreateSection("Farming")
 -- Individual farm toggles. Each method keeps its own state; no Select Method Farm dropdown.
 local FarmToggleNames = {
 	"Auto Farm Level",
@@ -6595,11 +6597,6 @@ local function SetIndividualFarm(name, enabled)
 	-- Farm toggles only kill mobs. Quests are handled exclusively by the Auto Quest toggle.
 end
 
-SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Level", Desc = nil, Default = Settings["Auto Farm Level"] or false }, function(v) SetIndividualFarm("Auto Farm Level", v) end)
-SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Bones", Desc = nil, Default = Settings["Auto Farm Bones"] or false }, function(v) SetIndividualFarm("Auto Farm Bones", v) end)
-SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Katakuri", Desc = nil, Default = Settings["Auto Farm Katakuri"] or false }, function(v) SetIndividualFarm("Auto Farm Katakuri", v) end)
-SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Tyrant of the Skies", Desc = nil, Default = Settings["Auto Farm Tyrant of the Skies"] or false }, function(v) SetIndividualFarm("Auto Farm Tyrant of the Skies", v) end)
-SettingAutoFarmSection.CreateToggle({ Title = "Aura Farm", Desc = nil, Default = Settings["Aura Farm"] or false }, function(v) SetIndividualFarm("Aura Farm", v) end)
 SettingAutoFarmSection.CreateSlider(
 	{
 		Title = "Distance Farm Aura",
@@ -6612,6 +6609,12 @@ SettingAutoFarmSection.CreateSlider(
 		SaveSettings("Distance Farm Aura", o)
 	end
 )
+SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Level", Desc = nil, Default = Settings["Auto Farm Level"] or false }, function(v) SetIndividualFarm("Auto Farm Level", v) end)
+SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Bones", Desc = nil, Default = Settings["Auto Farm Bones"] or false }, function(v) SetIndividualFarm("Auto Farm Bones", v) end)
+SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Katakuri", Desc = nil, Default = Settings["Auto Farm Katakuri"] or false }, function(v) SetIndividualFarm("Auto Farm Katakuri", v) end)
+SettingAutoFarmSection.CreateToggle({ Title = "Auto Farm Tyrant of the Skies", Desc = nil, Default = Settings["Auto Farm Tyrant of the Skies"] or false }, function(v) SetIndividualFarm("Auto Farm Tyrant of the Skies", v) end)
+SettingAutoFarmSection.CreateToggle({ Title = "Aura Farm", Desc = nil, Default = Settings["Aura Farm"] or false }, function(v) SetIndividualFarm("Aura Farm", v) end)
+SettingAutoFarmSection = FarmMain.CreateSection("Setting")
 SettingAutoFarmSection.CreateToggle(
 	{ Title = "Ignore Attack Katakuri", Desc = nil, Default = Settings["Ignore Attack Katakuri"] or false },
 	function(o)
@@ -6624,7 +6627,6 @@ SettingAutoFarmSection.CreateToggle(
 		SaveSettings("Hop Find Katakuri", o)
 	end
 )
-local o = SettingAutoFarmSection.CreateLabel({ Title = "Auto Quest only accepts the quest. Farm toggles only kill mobs." })
 SettingAutoFarmSection.CreateToggle(
 	{ Title = "Auto Quest", Desc = "Only accepts the quest of the selected farm (Level/Bones/Katakuri/Tyrant).", Default = Settings["Auto Quest [Katakuri/Bone/Tyrant]"] or false },
 	function(V)
@@ -7870,7 +7872,7 @@ BossRipIndraSection.CreateToggle(
 )
 BossRipIndraSection.CreateToggle(
 	{
-		Title = 'Hop Server Elite Hunter"',
+		Title = "Hop Server Elite Hunter",
 		Desc = "Hop if u have God chalice and teleport in safezone",
 		Default = Settings["Hop Server Elite Hunter"] or false,
 	},
@@ -8856,21 +8858,39 @@ task.spawn(function()
 				end
 			end
 			if Settings["Auto Elite Hunter"] then
+				local EliteRemote = game:GetService("ReplicatedStorage").Remotes.CommF_
 				local y = DetectEliteHunter()
+				if not y and tick() - (getgenv().__EliteReq or 0) > 6 then
+					-- Sem elite: pede a missão de Elite Hunter (é ela que faz o elite aparecer).
+					getgenv().__EliteReq = tick()
+					pcall(function()
+						EliteRemote:InvokeServer("EliteHunter")
+					end)
+					task.wait(3)
+					y = DetectEliteHunter()
+		end
 				if y then
 					StackFarm = false
 					StackFarmOther = false
-					if
-						not string.find(
-							game.Players.LocalPlayer.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text,
-							y.Name
-						) or not game:GetService("Players").LocalPlayer.PlayerGui.Main.Quest.Visible
-					then
-						game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("AbandonQuest")
-						game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("EliteHunter")
-					else
+					-- Antes exigia o NOME do elite no título da missão; se o título não tiver o nome,
+					-- ele abandonava e pedia a missão para sempre sem nunca atacar.
+					-- Agora: garante que existe alguma missão (pede só se não houver) e VAI atrás do elite.
+					local hasQuest = false
+					pcall(function()
+						hasQuest = AQIsQuestActive() == true
+					end)
+					if not hasQuest and tick() - (getgenv().__EliteReq or 0) > 4 then
+						getgenv().__EliteReq = tick()
+						pcall(function()
+							EliteRemote:InvokeServer("EliteHunter")
+						end)
+					end
+					do
 						repeat
 							task.wait()
+							if not y.Parent or not y:FindFirstChild("HumanoidRootPart") then
+								break
+							end
 							sizepart(y)
 							if Settings["Select Weapon"] == "Blox Fruit" then
 								toTarget(y.HumanoidRootPart.CFrame * CFrame.new(-7, 20, 0))
@@ -11331,10 +11351,41 @@ function RandomFruit()
 		return false
 	end
 
-	local ok, result = pcall(function()
-		return CommF:InvokeServer("Cousin", "Buy")
+	-- Em cooldown de falha (sem beli / sem tempo): não fica spamando o servidor.
+	if (getgenv().__RandomFruitNext or 0) > tick() then
+		return false
+	end
+
+	-- Caixa atual do banner (padrão "DLCBoxData" quando não há banner ativo).
+	local boxName = "DLCBoxData"
+	pcall(function()
+		local Banner = require(ReplicatedStorage.Controllers.BannerClient)
+		local item = Banner.TryGetBannerItemIfActiveAsync()
+		if item and item.BoxName then
+			boxName = item.BoxName
+		end
 	end)
-	return ok and result ~= false
+
+	local bought = false
+	-- 1) API nova: Cousin + nome da caixa (retorna 1 quando compra).
+	local ok1, r1 = pcall(function()
+		return CommF:InvokeServer("Cousin", boxName)
+	end)
+	if ok1 and (r1 == 1 or r1 == true) then
+		bought = true
+	end
+	-- 2) Fallback: API antiga "Cousin", "Buy".
+	if not bought then
+		local ok2, r2 = pcall(function()
+			return CommF:InvokeServer("Cousin", "Buy")
+		end)
+		if ok2 and r2 and r2 ~= 0 and r2 ~= false then
+			bought = true
+		end
+	end
+
+	getgenv().__RandomFruitNext = tick() + (bought and 1 or 5)
+	return bought
 end
 
 local FruitInfoModule = require(game:GetService("ReplicatedStorage").FruitInfo)
@@ -11355,7 +11406,16 @@ local function GetFruitOriginalName(tool)
 		return nil
 	end
 
+	-- Frutas com nome "Familia: Variante" (ex.: "Bird: Falcon", "Human: Buddha")
+	-- usam o formato "Familia-Familia: Variante" no inventário.
+	local family, variant = string.match(clean, "^(.-):%s*(.+)$")
+	if family and variant then
+		family = string.gsub(family, "%s+", "")
+		return family .. "-" .. family .. ": " .. variant
+	end
+
 	-- Formato usado pelo inventário de frutas quando o atributo não existe.
+	clean = string.gsub(clean, "%s+", "")
 	return clean .. "-" .. clean
 end
 
@@ -11399,8 +11459,14 @@ function StoreFruit(container)
 				local ok = pcall(function()
 					CommF:InvokeServer("StoreFruit", fruitName, tool)
 				end)
-
 				task.wait(0.3)
+				if tool.Parent then
+					-- Fallback: formato antigo, só com o nome.
+					ok = pcall(function()
+						CommF:InvokeServer("StoreFruit", fruitName)
+					end) or ok
+					task.wait(0.3)
+				end
 				local stored = ok and (not tool.Parent)
 				if not stored then
 					pcall(function()
@@ -14601,6 +14667,16 @@ BoatSettingSection.CreateToggle(
 RaceMain = Main.CreatePage({ Page_Name = "Upgrade Race", Page_Title = "Upgrade Race" })
 RaceDracoMain = Main.CreatePage({ Page_Name = "Race Draco", Page_Title = "Race Draco" })
 RaceDracoSection = RaceDracoMain.CreateSection("Race Draco")
+RaceDracoSection.CreateToggle(
+	{
+		Title = "Ignore Craft Volcanic Magnet [ Draco Fully ]",
+		Desc = nil,
+		Default = Settings["Ignore Craft Volcanic Magnet Draco"] or false,
+	},
+	function(g)
+		SaveSettings("Ignore Craft Volcanic Magnet Draco", g)
+	end
+)
 function DetectGearUp(b)
 	local s = require(game:GetService("Players").LocalPlayer.PlayerGui.TempleGui.LocalScriptTemple.Buttons)
 	b = b or (game.ReplicatedStorage.Remotes.CommF_:InvokeServer("TempleClock", "Check"))
@@ -15215,7 +15291,7 @@ function FullyDraco()
 			if not game:GetService("Workspace").Map:FindFirstChild("PrehistoricIsland") then
 				getgenv().RespawnVolcano = true
 				getgenv().turnoffnoclipBoatt = true
-				if not CheckItemInventory("Volcanic Magnet") then
+				if not CheckItemInventory("Volcanic Magnet") and not Settings["Ignore Craft Volcanic Magnet Draco"] then
 					if getgenv().dacoMagnet then
 						local g = tick()
 						repeat
@@ -19541,12 +19617,10 @@ SettingsVolcanoSection.CreateDropdown(
 )
 FarmingVolcanoSection = VolcanoTab.CreateSection("Farming Volcano")
 function AutoCraftinMagnetVol()
-	if Settings["Ignore Craft Volcanic Magnet"] then
-		return
-	end
+	-- "Ignore Craft [ Fully ]" afeta só o Fully Event; este toggle avulso sempre craftea.
 	if not CheckItemInventory("Volcanic Magnet") then
 		if not CheckCountItem("Scrap Metal", 10) then
-			local g = { "Jungle Pirate" }
+			local g = { "Jungle Pirate", "Musketeer Pirate" }
 			local f = DetectMob(g)
 			if not f then
 				if typeof(g) == "table" then
@@ -19625,7 +19699,7 @@ function AutoCraftinMagnetVol()
 								toTarget(R.CFrame * CFrame.new(0, 60, 0))
 							until (R.Position - t.Character.HumanoidRootPart.Position).Magnitude <= 100
 								or (DetectMob("Hydra Enforcer"))
-								or not Settings["Auto Quest Dragon Hunter"]
+								or not Settings["Auto Crafting Volcanic Magnet"]
 								or g
 							wait(1)
 						else
@@ -19713,11 +19787,9 @@ function AutoCraftinMagnetVol()
 			return
 		end
 		if CheckCountItem("Scrap Metal", 10) and (CheckCountItem("Blaze Ember", 15)) then
-			if not Settings["Ignore Craft Volcanic Magnet"] then
 			game:GetService("ReplicatedStorage").Modules.Net
 				:FindFirstChild("RF/Craft")
 				:InvokeServer(unpack({ [1] = "Craft", [2] = "Volcanic Magnet", [3] = 1, [4] = {} }))
-		end
 			wait(2)
 		end
 	else
@@ -20968,13 +21040,13 @@ require(game:GetService("ReplicatedStorage").Modules.CombatUtil).GetTargetPositi
 end
 MISCPVPSection = PvpTab.CreateSection("MISC PVP")
 MISCPVPSection.CreateSlider(
-	{ Title = "Input WalkSpeed", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input WalkSpeed"]) or 200, 220), Precise = true },
+	{ Title = "Input WalkSpeed", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input WalkSpeed"]) or 16, 220), Precise = true },
 	function(b)
 		SaveSettings("Input WalkSpeed", math.clamp(tonumber(b) or 0, 0, 220))
 	end
 )
 MISCPVPSection.CreateSlider(
-	{ Title = "Input JumpPower", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input JumpPower"]) or 200, 220), Precise = true },
+	{ Title = "Input JumpPower", Min = 0, Max = 220, Default = math.min(tonumber(Settings["Input JumpPower"]) or 50, 220), Precise = true },
 	function(b)
 		SaveSettings("Input JumpPower", math.clamp(tonumber(b) or 0, 0, 220))
 	end
@@ -21778,46 +21850,126 @@ Spinner = require(game:GetService("ReplicatedStorage").Controllers.UI.Spinner)
 SharedGachaUtil = require(game.ReplicatedStorage.Modules.Gacha.SharedGachaUtil)
 TextUtil = require(game.ReplicatedStorage.Modules.Util.TextUtil)
 -- Movimento: movido para fora do RenderStepped (antes criava um loop novo a cada frame).
+getgenv().__MoveGen = (getgenv().__MoveGen or 0) + 1
+local MoveGen = getgenv().__MoveGen
 function ApplyMovementSettings()
 	local Character = t.Character
 	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
 	if not Humanoid then return end
 
+	-- O jogo reescreve WalkSpeed por conta própria; reaplica imediatamente quando muda.
+	if Humanoid:GetAttribute("__WSHook") ~= MoveGen then
+		pcall(function()
+			Humanoid:SetAttribute("__WSHook", MoveGen)
+			Humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+				if getgenv().__MoveGen == MoveGen and Settings["Change WalkSpeed"] then
+					local sp = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
+					if Humanoid.WalkSpeed ~= sp then
+						Humanoid.WalkSpeed = sp
+					end
+				end
+			end)
+		end)
+	end
+
 	pcall(function()
+		-- Só força a velocidade enquanto o toggle está ligado; ao desligar, restaura uma vez.
+		-- (Antes forçava 16 a cada 0.15s e quebrava os buffs de velocidade do próprio jogo.)
 		if Settings["Change WalkSpeed"] then
 			Humanoid.WalkSpeed = math.clamp(tonumber(Settings["Input WalkSpeed"]) or 16, 0, 220)
-		else
+			getgenv().__WSApplied = true
+		elseif getgenv().__WSApplied then
 			Humanoid.WalkSpeed = 16
+			getgenv().__WSApplied = false
 		end
 
-		Humanoid.UseJumpPower = true
 		if Settings["Change JumpPower"] then
+			Humanoid.UseJumpPower = true
 			Humanoid.JumpPower = math.clamp(tonumber(Settings["Input JumpPower"]) or 50, 0, 220)
-		else
+			getgenv().__JPApplied = true
+		elseif getgenv().__JPApplied then
+			Humanoid.UseJumpPower = true
 			Humanoid.JumpPower = 50
+			getgenv().__JPApplied = false
 		end
 	end)
 end
 
 ApplyMovementSettings()
+pcall(function()
+	if getgenv().__MoveCharConn then
+		getgenv().__MoveCharConn:Disconnect()
+	end
+end)
 if t.CharacterAdded then
-	t.CharacterAdded:Connect(function()
+	getgenv().__MoveCharConn = t.CharacterAdded:Connect(function()
 		task.wait(0.25)
 		ApplyMovementSettings()
 	end)
 end
 
 task.spawn(function()
-	while task.wait(0.15) do
+	while task.wait(0.15) and getgenv().__MoveGen == MoveGen do
 		ApplyMovementSettings()
 	end
 end)
 
-if not getgenv().BananaCatMainLoop then
+-- Loops dedicados de Random Fruit e Store Fruit: independentes um do outro e do resto
+-- (antes dividiam o mesmo pcall; qualquer erro em outra função impedia as duas de rodar).
+do
+	getgenv().__FruitGen = (getgenv().__FruitGen or 0) + 1
+	local FruitGen = getgenv().__FruitGen
+	task.spawn(function()
+		while task.wait(0.5) and getgenv().__FruitGen == FruitGen do
+			pcall(function()
+					if Settings["Random Devil Fruit"] then
+						local playerGui = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
+						local spinnerWindow = playerGui and playerGui:FindFirstChild("SpinnerWindow")
+						if not spinnerWindow or not spinnerWindow.Enabled then
+							RandomFruit()
+						else
+							getgenv().__SpinOpenedAt = getgenv().__SpinOpenedAt or tick()
+							local above = spinnerWindow:FindFirstChild("AboveSpinner")
+							local navigation = above and above:FindFirstChild("Navigation")
+							local closeButton = navigation and navigation:FindFirstChild("CloseButton")
+							-- Se o botão de fechar não aparecer em 6s, fecha à força (antes ficava preso e parava de comprar).
+							if (closeButton and closeButton.Visible) or tick() - getgenv().__SpinOpenedAt > 6 then
+								pcall(function() Spinner:Close() end)
+								if tick() - getgenv().__SpinOpenedAt > 6 then
+									pcall(function() spinnerWindow.Enabled = false end)
+								end
+							end
+						end
+						if not (spinnerWindow and spinnerWindow.Enabled) then
+							getgenv().__SpinOpenedAt = nil
+						end
+					end
+			end)
+		end
+	end)
+	task.spawn(function()
+		while task.wait(1) and getgenv().__FruitGen == FruitGen do
+			if Settings["Auto Store Fruit"] then
+				pcall(StoreFruit, t.Backpack)
+				pcall(StoreFruit, t.Character)
+			end
+		end
+	end)
+end
+
+do
+	-- Ao reexecutar o script, o loop antigo continuava vivo usando o Settings ANTIGO,
+	-- então Random Fruit / Store Fruit e os outros toggles deste loop não respondiam.
+	pcall(function()
+		if getgenv().BananaCatMainLoopConn then
+			getgenv().BananaCatMainLoopConn:Disconnect()
+		end
+	end)
 	getgenv().BananaCatMainLoop = true
+	getgenv().__FruitBusy = false
 	lastHopTick = tick()
 	lastFruitTick = tick()
-	x.RenderStepped:Connect(function()
+	getgenv().BananaCatMainLoopConn = x.RenderStepped:Connect(function()
 		pcall(function()
 			sethiddenproperty(t, "SimulationRadius", 5000)
 		end)
@@ -21865,29 +22017,11 @@ if not getgenv().BananaCatMainLoop then
 			lastFruitTick = tick()
 			getgenv().__FruitBusy = true
 			local T, T = pcall(function()
-				if Settings["Random Devil Fruit"] then
-					local playerGui = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
-					local spinnerWindow = playerGui and playerGui:FindFirstChild("SpinnerWindow")
-					if not spinnerWindow or not spinnerWindow.Enabled then
-						RandomFruit()
-					else
-						local above = spinnerWindow:FindFirstChild("AboveSpinner")
-						local navigation = above and above:FindFirstChild("Navigation")
-						local closeButton = navigation and navigation:FindFirstChild("CloseButton")
-						if closeButton and closeButton.Visible then
-							pcall(function() Spinner:Close() end)
-						end
-					end
-				end
 				if Settings["Auto Trade Bone"] then
 					L.Remotes.CommF_:InvokeServer("Bones", "Buy", 1, 1)
 				end
 				if Settings["Buy Blox Fruit Sniper Shop"] then
 					BuyFruitShop()
-				end
-				if Settings["Auto Store Fruit"] then
-					StoreFruit(t.Backpack)
-					StoreFruit(t.Character)
 				end
 				if Settings["Auto Awake Fruit"] then
 					L.Remotes.CommF_:InvokeServer("Awakener", "Check")
@@ -22213,8 +22347,7 @@ function Auto_Saber_Helper_2()if b[1].Data.Level.Value>=200 then if not doorsabe
 -- TARGET-V14 FUNCTION: Auto_Upgrade_Race_V2_V3_Draco (source-recovery line 1651)
 function Auto_Upgrade_Race_V2_V3_Draco()if game.Players.LocalPlayer.Data.Race.Value~="Draco"then b[1].CreateNoti({Title="Banana Cat Hub",Desc="Change Race Draco plz",ShowTime=5});wait(5);return;elseif DetectItemPlr("Primordial Reign")then b[1].CreateNoti({Title="Banana Cat Hub",Desc="Done V3 Draco",ShowTime=5});wait(5);return;end;local Z=workspace.NPCs:FindFirstChild("Dragon Wizard")or(game:GetService("ReplicatedStorage").NPCs:FindFirstChild("Dragon Wizard"))or NPCManager.getNPCsByName("Dragon Wizard")[1]._modelState._instance;if not getgenv().QuestDraco or getgenv().QuestDraco and not table.find(b[2],getgenv().QuestDraco.AvailableVQuest)then if b[3]:DistanceFromCharacter(Z.HumanoidRootPart.Position)>8 then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,4,4));else getgenv().QuestDraco=game:GetService("ReplicatedStorage").Modules.Net["RF/InteractDragonQuest"]:InvokeServer({NPC="Dragon Wizard",Command="Speak"});wait(1);if getgenv().QuestDraco and getgenv().QuestDraco.AvailableVQuest=="V2"or getgenv().QuestDraco.AvailableVQuest=="V3"then game:GetService("ReplicatedStorage").Modules.Net["RF/InteractDragonQuest"]:InvokeServer({NPC="Dragon Wizard",Command="Ascension",Action="Begin"});getgenv().QuestDraco=game:GetService("ReplicatedStorage").Modules.Net["RF/InteractDragonQuest"]:InvokeServer({NPC="Dragon Wizard",Command="Speak"});end;end;elseif getgenv().QuestDraco.AvailableVQuest=="V2TurnInReady"then game:GetService("ReplicatedStorage").Modules.Net["RF/InteractDragonQuest"]:InvokeServer({NPC="Dragon Wizard",Command="Ascension",Action="Complete"});getgenv().QuestDraco=nil;elseif getgenv().QuestDraco.AvailableVQuest=="V3TurnInReady"then game:GetService("ReplicatedStorage").Modules.Net["RF/InteractDragonQuest"]:InvokeServer({NPC="Dragon Wizard",Command="Ascension",Action="Complete"});getgenv().QuestDraco=nil;elseif getgenv().QuestDraco.AvailableVQuest=="V2InProgress"then if not CheckCountItem("Fire Flower",5)then local F=DetectFireFlower();if F then toTarget(F.PrimaryPart.CFrame);if b[3]:DistanceFromCharacter(F.PrimaryPart.Position)<8 then fireproximityprompt(F.ProximityPrompt,1);end;else local F=DetectMob("Forest Pirate");if not F then local c=DetectPartSpawnMob("Forest Pirate",true);if c then Instance.new("IntValue",c).Name="Ignored";repeat wait();toTarget(c.CFrame*CFrame.new(0,60,0));until(c.Position-b[3].Character.HumanoidRootPart.Position).Magnitude<=100 or(DetectMob("Forest Pirate"))or not Settings["Auto Upgrade Race V2-V3 Draco"]or(wait(1));else DeleteIgnoredMobSpawn();end;else repeat task.wait();sizepart(F);BringMob(F);UsedualFlock();ClickM1(F);if Settings["Select Weapon"]=="Blox Fruit"then toTarget(F.HumanoidRootPart.CFrame*CFrame.new(-7,getgenv().YPosFruit or 20,0));else toTarget(F.HumanoidRootPart.CFrame*CFrame.new(7,20,0));end;until not IsMobAlive(F)or not Settings["Auto Upgrade Race V2-V3 Draco"];end;end;elseif b[3]:DistanceFromCharacter(Z.HumanoidRootPart.Position)>8 then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,4,4));else game:GetService("ReplicatedStorage").Modules.Net["RF/InteractDragonQuest"]:InvokeServer({NPC="Dragon Wizard",Command="Ascension",Action="Complete"});getgenv().QuestDraco=nil;end;elseif getgenv().QuestDraco.AvailableVQuest=="V3InProgress"then SaveSettings("V3InProgress",true);if not getgenv().KilledTerroshark then local F,c=CheckNameBoss("Terrorshark"),checkboat();if not F then if not c then local l=CFrame.new(-16204.0810546875,9.0863618850708,479.2259521484375);if(l.Position-b[3].Character.HumanoidRootPart.Position).Magnitude>8 then toTarget(l);else game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("BuyBoat","PirateBrigade");end;else local l=DecectPartRoughSea();if l then wait(1);b[4][7][b[4][6]]=if b[4][7][b[4][6]]==0 then 7000 else 0;Instance.new("IntValue",l).Name="Ignored";wait(0.5);end;getgenv().RoughSea=b[4][7][b[4][6]];l=CFrame.new(-32975.9921875,c.WorldPivot.Y,25963.7109375)*CFrame.new(0,c.WorldPivot.Y,RoughSea);if not b[3].Character.Humanoid.Sit then toTarget(c.VehicleSeat.CFrame);else manageTween(c.VehicleSeat,l,150,"TweenBoat");end;end;else repeat task.wait();TeleportSeaEvents(F);local c=F:FindFirstChild("HumanoidRootPart");getgenv().AimPos=CFrame.new(c.Position.X,40,c.Position.Z);UsedualFlock();ClickM1(F,true);until not IsMobAlive(F)or not Settings["Auto Upgrade Race V2-V3 Draco"];getgenv().KilledTerroshark=true;end;elseif b[3]:DistanceFromCharacter(Z.HumanoidRootPart.Position)>8 then toTarget(Z.HumanoidRootPart.CFrame*CFrame.new(0,4,4));else game:GetService("ReplicatedStorage").Modules.Net["RF/InteractDragonQuest"]:InvokeServer({NPC="Dragon Wizard",Command="Ascension",Action="Complete"});getgenv().QuestDraco=nil;getgenv().KilledTerroshark=false;end;end;end
 
--- TARGET-V14 FUNCTION: BringMob (source-recovery line 661)
-function BringMob(...)local __args = {...};local b = __args[1];local Z = __args[5];return function(Z)if not Settings["Bring Mob"]then return;end;if Z and b[1][7][b[1][6]]~=Z then b[1][7][b[1][6]]=Z;b[2][7][b[2][6]]=Z.HumanoidRootPart.CFrame;DeleteIgnoredMob();end;if DaBringMob then delay(0.1,function()getgenv().DaBringMob=false;end);return;end;local F={};if not Z:FindFirstChild("Ignored")then table.insert(F,Z);end;for c,c in b[3](game:GetService("Workspace").Enemies:GetChildren())do if c~=Z and c.Name==Z.Name and not c:FindFirstChild("Ignored")and(IsMobAlive(c))and(isnetworkowner2(c.HumanoidRootPart))then if(c.HumanoidRootPart.Position-b[2][7][b[2][6]].Position).Magnitude<=200 and#F<1 then table.insert(F,c);end;end;end;if b[2][7][b[2][6]]and(b[4].Character.HumanoidRootPart.Position-Z.HumanoidRootPart.Position).Magnitude<=50 and(isnetworkowner2(b[4].Character.HumanoidRootPart))then for Z,Z in b[3](F)do sizepart(Z);Z.HumanoidRootPart.CFrame=b[2][7][b[2][6]]*CFrame.new(0,math.random(0,2),math.random(0,2));task.spawn(function()local b=Z.Humanoid.Health;task.wait(3.5);if Z.Humanoid.Health==b and not Z:FindFirstChild("Ignored")then Z.HumanoidRootPart.CFrame=Z.WorldPivot;Instance.new("IntValue",Z).Name="Ignored";task.wait(0.3);end;end);getgenv().DaBringMob=true;end;end;end;end
+-- (removida: sobrescrita quebrada de BringMob; vale a versão original acima)
 
 -- TARGET-V14 FUNCTION: BuildBossNameList (source-recovery line 1732)
 function BuildBossNameList(Z)local F=BossRuntime:GetLegacyLookup();local c={};for l,H in b[1](BossRuntime:GetCandidates(Z==true))do if BossRuntime:IsUsable(H)then local M,S=H:GetAttribute("IsBoss"),BossRuntime:ResolveAlias(H,F);if M==true or M==nil and S~=nil then l=S or(BossRuntime:GetCanonicalName(H));local H=BossRuntime:NormalizeName(l);if H~=""and c[H]==nil then c[H]=l;end;end;end;end;F={};for l,l in b[1](BossRuntime.LegacyNames or{})do Z=BossRuntime:NormalizeName(l);if c[Z]~=nil then F[#F+1]=l;c[Z]=nil;end;end;local Z={};for l,l in b[2](c)do Z[#Z+1]=l;end;table.sort(Z,function(c,l)local H,M=BossRuntime:NormalizeName(c),BossRuntime:NormalizeName(l);if H==M then return b[3](c)<b[3](l);end;return H<M;end);for c,c in b[1](Z)do F[#F+1]=c;end;return F;end
@@ -22304,8 +22437,7 @@ function GetNearestBerry(...)local __args = {...};local b = __args[1];local Z = 
 -- TARGET-V14 FUNCTION: GetNearestChest (source-recovery line 1246)
 function GetNearestChest(...)local __args = {...};local b = __args[1];local Z = __args[5];return function()local Z,F=game:GetService("CollectionService"):GetTagged("_ChestTagged");local c=math.huge;local l=nil;local H=nil;for M,S in b[1],Z,F do if not S:GetAttribute("IsDisabled")and not S:FindFirstChild("Ignored")then M=b[2]:DistanceFromCharacter(S.Position);if M<c then c,l,H=M,i,S;end;end;end;return H;end;end
 
--- TARGET-V14 FUNCTION: HopServer (source-recovery line 415)
-function HopServer()for c=1,100,1 do for l,H in b[1]((game:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer(c)))do if l~=game.JobId and not table.find(CheckJobIdServer(),l)then game:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer("teleport",l);writefile("Banana Cat Hub/Jobid.json",game:GetService("HttpService"):JSONEncode(b[2]));getgenv().limit_type("clearAll");end;end;end;end
+-- (removida: sobrescrita quebrada de HopServer; vale a versão original acima)
 
 -- TARGET-V14 FUNCTION: HopServerLess (source-recovery line 1720)
 function HopServerLess()local H,M=if c==""then(game.HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..Z.."/servers/Public?sortOrder=Asc&limit=100")))else(game.HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..Z.."/servers/Public?sortOrder=Asc&limit=100&cursor="..c))),"";local Z=H.nextPageCursor and H.nextPageCursor~="null"and H.nextPageCursor~=nil;if Z then c=H.nextPageCursor;end;local Z=0;for c,c in b[1](H.data)do local H=true;M=b[3](c.id);if b[4](c.maxPlayers)>b[4](c.playing)and b[4](c.playing)<=3 then for c,c in b[1](F)do if Z~=0 then H=if M==b[3](c)then false else H;elseif b[4](l)~=b[4](c)then b[2](function()delfile("Banana Cat Hub/NotSameServers.json");F={};table.insert(F,l);end);end;Z+=1;end;if H==true then table.insert(F,M);wait();b[2](function()writefile("Banana Cat Hub/NotSameServers.json",game:GetService("HttpService"):JSONEncode(F));wait();game:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer("teleport",M);getgenv().limit_type("clearAll");end);wait(4);end;end;end;end
