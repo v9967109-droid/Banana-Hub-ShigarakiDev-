@@ -9148,6 +9148,7 @@ task.spawn(function()
 			if Settings["Auto Elite Hunter"] then
 				local EliteRemote = game:GetService("ReplicatedStorage").Remotes.CommF_
 				local EliteNames = { "Deandre", "Urban", "Diablo" }
+
 				-- Lê qual elite é o alvo da missão atual (pelo título da missão).
 				local function GetEliteQuestName()
 					local found
@@ -9165,55 +9166,68 @@ task.spawn(function()
 					end)
 					return found
 				end
-				-- Procura o elite da missão: primeiro no mapa (Enemies), depois no ReplicatedStorage.
+
+				-- Procura o elite somente nas instâncias reais do mapa.
+				-- Alguns servidores colocam o modelo dentro de outra pasta do Enemies.
 				local function FindEliteByName(n)
-					if not n then
+					local enemies = workspace:FindFirstChild("Enemies")
+					if not enemies then
 						return nil
 					end
-					local m = workspace.Enemies:FindFirstChild(n)
-					if m and m:IsA("Model") and IsMobAlive(m) then
-						return m
+
+					if n then
+						local m = enemies:FindFirstChild(n)
+						if m and m:IsA("Model") and IsMobAlive(m) then
+							return m
+						end
+
+						for _, m in ipairs(enemies:GetDescendants()) do
+							if m:IsA("Model") and m.Name == n and IsMobAlive(m) then
+								return m
+							end
+						end
 					end
-					m = game:GetService("ReplicatedStorage"):FindFirstChild(n)
-					if m and m:IsA("Model") and IsMobAlive(m) then
-						return m
-					end
+
+					return nil
 				end
+
 				local questName = GetEliteQuestName()
-				if not questName and tick() - (getgenv().__EliteReq or 0) > 5 then
-					-- Sem missão de elite: pede uma (é ela que faz o elite aparecer).
-					getgenv().__EliteReq = tick()
-					pcall(function()
-						EliteRemote:InvokeServer("EliteHunter")
-					end)
-					task.wait(2)
+
+				-- Se ainda não houver missão, pede uma e dá tempo para o servidor atualizar a GUI/alvo.
+				if not questName then
+					EliteRequest()
+					task.wait(0.25)
 					questName = GetEliteQuestName()
 				end
+
+				-- Procura primeiro o alvo da missão e, como fallback, qualquer Elite Hunter ativo.
 				local y = FindEliteByName(questName)
-				if not y and not questName then
-					-- Título da missão não trouxe o nome: usa o elite detectado (mapa antes do ReplicatedStorage).
-					for _, n in ipairs(EliteNames) do
-						y = FindEliteByName(n)
-						if y then
-							break
+				if not y then
+					y = DetectEliteHunter()
+					if y and questName and y.Name ~= questName then
+						local questTarget = FindEliteByName(questName)
+						if questTarget then
+							y = questTarget
 						end
 					end
 				end
+
 				if y then
 					StackFarm = false
 					StackFarmOther = false
 					getgenv().__EliteLost = nil
+
 					local engagedName = y.Name
 					repeat
 						task.wait()
-						-- O elite pode trocar de instância (ReplicatedStorage -> mapa) ao chegar perto.
-						if not y.Parent or not y:FindFirstChild("HumanoidRootPart") then
-							y = FindEliteByName(engagedName)
-							if not y then
-								break
-							end
+
+						-- Reencontra o NPC a cada ciclo para evitar ficar parado
+						-- quando a instância do Elite muda/carrega no mapa.
+						if not y.Parent or not y:FindFirstChild("HumanoidRootPart") or not IsMobAlive(y) then
+							y = FindEliteByName(engagedName) or DetectEliteHunter()
 						end
-						if y.Parent == workspace.Enemies then
+
+						if y and y:FindFirstChild("HumanoidRootPart") and IsMobAlive(y) then
 							sizepart(y)
 							if Settings["Select Weapon"] == "Blox Fruit" then
 								toTarget(y.HumanoidRootPart.CFrame * CFrame.new(-7, 20, 0))
@@ -9222,11 +9236,11 @@ task.spawn(function()
 							end
 							ClickM1(y)
 							UsedualFlock()
-						else
-							-- Ainda não carregou no mapa: voa até a posição do elite.
-							toTarget(y.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
 						end
-					until not Settings["Auto Elite Hunter"] or not IsMobAlive(y) and not FindEliteByName(engagedName)
+					until not Settings["Auto Elite Hunter"]
+						or not y
+						or not IsMobAlive(y)
+
 					if not IsMobAlive(y) and getgenv().QuestTrainer and getgenv().QuestTrainer.CountKillMob then
 						getgenv().QuestTrainer.CountKillMob = getgenv().QuestTrainer.CountKillMob + 1
 					end
