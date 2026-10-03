@@ -2148,6 +2148,125 @@ StatusPrehistoricIsland = SectionStatus.CreateLabel({ Title = "Prehistoric Islan
 StatusFrozenDimension = SectionStatus.CreateLabel({ Title = "Frozen Dimension" })
 StatusMoon = SectionStatus.CreateLabel({ Title = "Moon" })
 StatusGear = SectionStatus.CreateLabel({ Title = "Acient One Status" })
+-- ===================== Status Bosses Spawn =====================
+-- Aba: bosses que nascem NORMALMENTE (por tempo). Cada boss mostra só uma bolinha:
+--   🟢 = o script detectou o boss spawnado agora (vivo em Enemies ou ReplicatedStorage)
+--   🔴 = o script não detectou o boss (não spawnado)
+-- Bosses que nascem por ação do jogador (summon, raid etc.) não estão nesta lista.
+do
+	local BossPage = Main.CreatePage({ Page_Name = "Status Bosses Spawn", Page_Title = "Status Bosses Spawn" })
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+	local Seas = {
+		{
+			title = "First Sea",
+			here = function()
+				return game.PlaceId == getgenv().CheckPlaceId3
+			end,
+			bosses = {
+				"Gorilla King", "Bobby", "The Saw", "Yeti", "Mob Leader", "Vice Admiral", "Warden",
+				"Magma Admiral", "Fishman Lord", "Wysper", "Thunder God", "Cyborg", "Ice Admiral", "Greybeard",
+			},
+		},
+		{
+			title = "Second Sea",
+			here = function()
+				return game.PlaceId == getgenv().CheckPlaceId2
+			end,
+			bosses = {
+				"Diamond", "Jeremy", "Fajita", "Don Swan", "Smoke Admiral", "Cursed Captain",
+				"Awakened Ice Admiral", "Tide Keeper",
+			},
+		},
+		{
+			title = "Third Sea",
+			here = function()
+				return game.PlaceId == getgenv().CheckPlaceId
+			end,
+			bosses = { "Stone", "Hydra Leader", "Kilo Admiral", "Captain Elephant", "Longma", "Cake Queen" },
+		},
+	}
+
+	local Known, Order = {}, {}
+	for _, sea in ipairs(Seas) do
+		local section = BossPage.CreateSection(sea.title)
+		for _, name in ipairs(sea.bosses) do
+			local entry = { name = name, here = sea.here, shown = nil }
+			entry.label = section.CreateLabel({ Title = "🔴 " .. name })
+			Known[name] = entry
+			Order[#Order + 1] = entry
+		end
+	end
+
+	local function CleanName(n)
+		n = n:gsub("%s*%[Lv%. [^%]]+%]", "")
+		n = n:gsub("%s*%[Boss%]", "")
+		return n
+	end
+
+	-- Bosses da lista vivos agora (Enemies + ReplicatedStorage). Retorna nome -> onde achou.
+	local function ScanAlive()
+		local alive = {}
+		local function scan(container, where)
+			if not container then
+				return
+			end
+			for _, model in ipairs(container:GetChildren()) do
+				if model:IsA("Model") and not model.Name:find("%[Raid Boss%]") then
+					local e = Known[CleanName(model.Name)]
+					if e then
+						local hum = model:FindFirstChildOfClass("Humanoid")
+						if hum and hum.Health > 0 then
+							alive[e.name] = where
+						end
+					end
+				end
+			end
+		end
+		scan(workspace:FindFirstChild("Enemies"), "mapa")
+		scan(ReplicatedStorage, "ReplicatedStorage")
+		return alive
+	end
+
+	getgenv().__BossStatusGen = (getgenv().__BossStatusGen or 0) + 1
+	local Gen = getgenv().__BossStatusGen
+	task.spawn(function()
+		while task.wait(1) and getgenv().__BossStatusGen == Gen do
+			pcall(function()
+				local alive = ScanAlive()
+				for _, e in ipairs(Order) do
+					local text
+					if alive[e.name] then
+						text = "🟢 " .. e.name
+					elseif e.here() then
+						text = "🔴 " .. e.name
+					else
+						-- Boss de outro mar: o script não consegue ver, então fica vermelho.
+						text = "🔴 " .. e.name .. " (outro mar)"
+					end
+					if text ~= e.shown then
+						e.shown = text
+						e.label.SetText(text)
+					end
+				end
+			end)
+		end
+	end)
+
+	-- Diagnóstico: mostra no console (F9) o que o script enxerga.
+	local DebugSection = BossPage.CreateSection("Debug")
+	DebugSection.CreateButton({ Title = "Debug Boss Spawn (ver no F9)" }, function()
+		local alive = ScanAlive()
+		print("[Banana Cat Hub] ===== Debug Boss Spawn =====")
+		for _, e in ipairs(Order) do
+			if e.here() then
+				print(string.format("  %-24s vivo=%s onde=%s", e.name, tostring(alive[e.name] ~= nil), tostring(alive[e.name])))
+			end
+		end
+		print("[Banana Cat Hub] ===== fim =====")
+	end)
+end
+-- ===============================================================
 SectionServer = PageStatusAndServer.CreateSection("Server")
 SectionServer.CreateButton({ Title = "Open Gui Server Browser (Low Player and Ping)" }, function()
 	local G = game:GetService("HttpService")
