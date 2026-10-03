@@ -8290,7 +8290,7 @@ function GetPirateRaid(f)
 			and not string.find(V.Name, "Wraith")
 			and V.Name ~= "rip_indra True Form"
 			and (IsMobAlive(V))
-			and (V.HumanoidRootPart.Position - Vector3.new(-5543, 313, -2964)).magnitude < 1000
+			and (V.HumanoidRootPart.Position - Vector3.new(-5502.1787109375, 323.6708984375, -2863.4616699219)).magnitude < 1000
 		then
 			return V
 		end
@@ -9340,7 +9340,7 @@ task.spawn(function()
 					StackFarm = false
 					StackFarmOther = false
 					getgenv().DetectRaidCastle = true
-					toTarget(CFrame.new(-5543, 313, -2964))
+					toTarget(CFrame.new(-5502.1787109375, 323.6708984375, -2863.4616699219))
 				end
 			end
 			if Settings["Teleport To Fruit"] then
@@ -25514,3 +25514,77 @@ __PASS38_NAMED_FUNCTIONS = {
         if type(__fn) == "function" then rawset(_G, __name, __fn) end
     end
 end)()
+
+
+-- COMPLETE FIX PACK: Sea Event, Skull Guitar click, Fruit TP, Elite Hunter, Pirate Raid.
+do
+ local S={target=nil,search=0,boat=0,tp=0,hit=0,buying=false}
+ local function part(v)return v and v.Parent and (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Engine") or v.PrimaryPart)end
+ local function alive(v)
+  if not v or not v.Parent then return false end
+  local h=v:FindFirstChildWhichIsA("Humanoid"); if h then return h.Health>0 end
+  local hp=v:FindFirstChild("Health"); return (not hp or not hp:IsA("ValueBase") or hp.Value>0) and part(v)~=nil
+ end
+ local function selected()
+  if not StackFarmOther or not Settings["Auto Sea Event"] then return false end
+  for n,on in pairs(SafeMultiSelect("Select Sea Events"))do if on and n~="Only Farm Ship Brigade" then return true end end
+  return false
+ end
+ local function skullClick(v,p)
+  local char=t.Character; if not char then return end
+  local tool=char:FindFirstChild("Skull Guitar")
+  if not tool then
+   local bp=t.Backpack:FindFirstChild("Skull Guitar")
+   if bp then char:FindFirstChildOfClass("Humanoid"):EquipTool(bp); return end
+   pcall(function()game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("LoadItem","Skull Guitar")end); return
+  end
+  local remote=tool:FindFirstChild("RemoteEvent")
+  if remote then pcall(function()remote:FireServer("TAP",p.Position)end) end
+ end
+ function AutoSeabeast()
+  if not selected() then S.target=nil return end
+  local now=os.clock()
+  if not alive(S.target)then S.target=nil end
+  if not S.target and now-S.search>=.75 then S.search=now;local ok,v=pcall(DetectSeaEvents);if ok and alive(v)then S.target=v end end
+  if not S.target then
+   getgenv().PathSeaBeast=false;getgenv().PathTerrorshark=false;getgenv().PathSpinBoat=false
+   if not S.buying and now-S.boat>=5 then S.boat=now;S.buying=true;task.spawn(function()pcall(BuyBoatAndTeleBoat);task.wait(1);S.buying=false end)end
+   return
+  end
+  local v,p=S.target,part(S.target);if not p then S.target=nil return end
+  getgenv().PathSpinBoat=v;getgenv().PathSeaBeast=v.Name=="SeaBeast1" and v or false;getgenv().PathTerrorshark=v.Name=="Terrorshark" and v or false
+  if now-S.tp>=.45 then S.tp=now;pcall(TeleportSeaEvents,v)end
+  if now-S.hit<.12 or t:DistanceFromCharacter(p.Position)>500 then return end;S.hit=now
+  if Settings["Auto Use Dragon Storm For All Sea Events"] or Settings["Use Dragonstorm For Sea Event"] then
+   if typeof(EquipOnlyIfNeeded)=="function"then EquipOnlyIfNeeded("Dragonstorm",1.25)else equiptool("Dragonstorm")end
+   if typeof(SpamGunDragonStorm)=="function"then pcall(SpamGunDragonStorm,p)end
+  elseif Settings["Use Click M1 Skull Guitar For Sea Event"]then skullClick(v,p)
+  elseif Settings["Use Click M1 Fruit For Sea Event"] and typeof(getgenv().UseFruitM1)=="function"then pcall(getgenv().UseFruitM1,v)
+  else pcall(ClickM1,v,true)end
+ end
+ getgenv().AutoSeaEvent=AutoSeabeast
+end
+
+do
+ local F={last=0,cached=nil}
+ function GetPathFruit()
+  if F.cached and F.cached.Parent and F.cached:FindFirstChild("Handle",true)then return F.cached end
+  if os.clock()-F.last<.35 then return nil end;F.last=os.clock()
+  local root=t.Character and t.Character:FindFirstChild("HumanoidRootPart");local best,bd
+  for _,v in ipairs(workspace:GetDescendants())do
+   if (v:IsA("Tool")or v:IsA("Model"))and v.Name:find("Fruit",1,true)and not v:FindFirstChild("Ignored")then
+    local h=v:FindFirstChild("Handle",true);if h and h:IsA("BasePart")then local d=root and(h.Position-root.Position).Magnitude or 0;if not bd or d<bd then best,bd=v,d end end
+   end
+  end
+  F.cached=best;return best
+ end
+end
+
+do
+ local N={Deandre=true,Urban=true,Diablo=true}
+ function DetectEliteHunter(wanted)
+  local root=t.Character and t.Character:FindFirstChild("HumanoidRootPart");local best,bd
+  local function scan(folder)if not folder then return end for _,v in ipairs(folder:GetDescendants())do if v:IsA("Model")and N[v.Name]and(not wanted or v.Name==wanted)and v:FindFirstChild("HumanoidRootPart")and IsMobAlive(v)then local d=root and(v.HumanoidRootPart.Position-root.Position).Magnitude or 0;if not bd or d<bd then best,bd=v,d end end end end
+  scan(workspace:FindFirstChild("Enemies"));scan(game:GetService("ReplicatedStorage"):FindFirstChild("Enemies"));return best
+ end
+end
