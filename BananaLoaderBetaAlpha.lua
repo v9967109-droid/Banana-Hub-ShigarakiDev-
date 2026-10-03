@@ -2148,6 +2148,164 @@ StatusPrehistoricIsland = SectionStatus.CreateLabel({ Title = "Prehistoric Islan
 StatusFrozenDimension = SectionStatus.CreateLabel({ Title = "Frozen Dimension" })
 StatusMoon = SectionStatus.CreateLabel({ Title = "Moon" })
 StatusGear = SectionStatus.CreateLabel({ Title = "Acient One Status" })
+-- ===================== Status Bosses Spawn =====================
+-- Aba nova: bosses que nascem NORMALMENTE (por tempo), com nome e minutos de respawn.
+-- Quando o tempo chega a 0 aparece a setinha verde (🟢 ➜ SPAWNADO), em tempo real.
+-- Bosses que nascem por ação do jogador (summon, raid etc.) não estão nesta lista.
+do
+	local BossPage = Main.CreatePage({ Page_Name = "Status Bosses Spawn", Page_Title = "Status Bosses Spawn" })
+	local Seas = {
+		{
+			title = "First Sea",
+			here = function()
+				return game.PlaceId == getgenv().CheckPlaceId3
+			end,
+			bosses = {
+				{ "Gorilla King", 4 },
+				{ "Bobby", 10 },
+				{ "The Saw", 75 },
+				{ "Yeti", 5 },
+				{ "Mob Leader", 1 },
+				{ "Vice Admiral", 7 },
+				{ "Warden", 5 },
+				{ "Magma Admiral", 20 },
+				{ "Fishman Lord", 20 },
+				{ "Wysper", 20 },
+				{ "Thunder God", 30 },
+				{ "Cyborg", 30 },
+				{ "Ice Admiral", 20 },
+				{ "Greybeard", 300 },
+			},
+		},
+		{
+			title = "Second Sea",
+			here = function()
+				return game.PlaceId == getgenv().CheckPlaceId2
+			end,
+			bosses = {
+				{ "Diamond", 30 },
+				{ "Jeremy", 20 },
+				{ "Fajita", 15 },
+				{ "Don Swan", 30 },
+				{ "Smoke Admiral", 20 },
+				{ "Cursed Captain", 30 },
+				{ "Awakened Ice Admiral", 20 },
+				{ "Tide Keeper", 30 },
+			},
+		},
+		{
+			title = "Third Sea",
+			here = function()
+				return game.PlaceId == getgenv().CheckPlaceId
+			end,
+			bosses = {
+				{ "Stone", 25 },
+				{ "Hydra Leader", 25 },
+				{ "Kilo Admiral", 30 },
+				{ "Captain Elephant", 30 },
+				{ "Longma", 30 },
+				{ "Cake Queen", 30 },
+			},
+		},
+	}
+
+	local Known = {} -- nome -> { minutes, label, here, state... }
+	local Order = {}
+	for _, sea in ipairs(Seas) do
+		local section = BossPage.CreateSection(sea.title)
+		for _, b in ipairs(sea.bosses) do
+			local name, minutes = b[1], b[2]
+			local entry = {
+				name = name,
+				minutes = minutes,
+				here = sea.here,
+				alive = false,
+				nextSpawn = nil, -- quando o contador fecha em 0
+				seen = false, -- já vimos esse boss vivo e depois morto neste servidor
+				shown = nil,
+			}
+			entry.label = section.CreateLabel({ Title = "⚪ " .. name .. " — " .. minutes .. " min" })
+			Known[name] = entry
+			Order[#Order + 1] = entry
+		end
+	end
+
+	local function CleanName(n)
+		n = n:gsub("%s*%[Lv%. [^%]]+%]", "")
+		n = n:gsub("%s*%[Boss%]", "")
+		return n
+	end
+
+	local function Fmt(sec)
+		sec = math.max(0, math.floor(sec))
+		local h = math.floor(sec / 3600)
+		local m = math.floor((sec % 3600) / 60)
+		local c = sec % 60
+		if h > 0 then
+			return string.format("%02d:%02d:%02d", h, m, c)
+		end
+		return string.format("%02d:%02d", m, c)
+	end
+
+	getgenv().__BossStatusGen = (getgenv().__BossStatusGen or 0) + 1
+	local Gen = getgenv().__BossStatusGen
+	task.spawn(function()
+		while task.wait(1) and getgenv().__BossStatusGen == Gen do
+			pcall(function()
+				-- Bosses vivos no mapa agora (só os da lista; raid boss fica de fora).
+				local alive = {}
+				local enemies = workspace:FindFirstChild("Enemies")
+				if enemies then
+					for _, model in ipairs(enemies:GetChildren()) do
+						if model:IsA("Model") and not model.Name:find("%[Raid Boss%]") then
+							local entry = Known[CleanName(model.Name)]
+							if entry then
+								local hum = model:FindFirstChildOfClass("Humanoid")
+								if hum and hum.Health > 0 then
+									alive[entry.name] = true
+								end
+							end
+						end
+					end
+				end
+
+				local now = tick()
+				for _, e in ipairs(Order) do
+					local text
+					if not e.here() then
+						text = "⚫ " .. e.name .. " — " .. e.minutes .. " min (outro mar)"
+					elseif alive[e.name] then
+						e.alive = true
+						e.nextSpawn = nil
+						text = "🟢 ➜ " .. e.name .. " — SPAWNADO"
+					else
+						if e.alive then
+							-- Acabou de morrer: começa a contar o respawn.
+							e.alive = false
+							e.seen = true
+							e.nextSpawn = now + e.minutes * 60
+						end
+						if e.nextSpawn then
+							local remaining = e.nextSpawn - now
+							if remaining <= 0 then
+								text = "🟢 ➜ " .. e.name .. " — SPAWNADO"
+							else
+								text = "🟡 " .. e.name .. " — " .. Fmt(remaining) .. " (" .. e.minutes .. " min)"
+							end
+						else
+							text = "⚪ " .. e.name .. " — " .. e.minutes .. " min"
+						end
+					end
+					if text ~= e.shown then
+						e.shown = text
+						e.label.SetText(text)
+					end
+				end
+			end)
+		end
+	end)
+end
+-- ===============================================================
 SectionServer = PageStatusAndServer.CreateSection("Server")
 SectionServer.CreateButton({ Title = "Open Gui Server Browser (Low Player and Ping)" }, function()
 	local G = game:GetService("HttpService")
@@ -6143,9 +6301,6 @@ function EquipOnlyIfNeeded(toolName, interval)
 	hum:EquipTool(bp)
 	return false -- vai atirar no próximo ciclo
 end
--- Clique físico da Dragonstorm (centro da tela, a cada 2s): VirtualInputManager como principal
--- e VirtualUser como reforço. É o MESMO clique usado pelo "Auto Use M1 DragonStorm For Sea Events"
--- e agora também pelo Farm normal e pelo Auto Use DragonStorm For ALL Sea Event.
 function DragonstormPhysicalClick(force)
 	local now = os.clock()
 	if not force and now - (getgenv().__DSClickLast or 0) < 2 then
@@ -6182,13 +6337,6 @@ function ShootM1(E)
 		return false
 	end
 	local gunName = NameWeapon("Gun")
-	-- Com o M1 da Dragonstorm ligado e o Auto Sea Event ativo, a Gun do farm é a Dragonstorm.
-	if Settings["Auto Use M1 DragonStorm For Sea Events"]
-		and Settings["Auto Sea Event"]
-		and (t.Backpack:FindFirstChild("Dragonstorm") or char:FindFirstChild("Dragonstorm"))
-	then
-		gunName = "Dragonstorm"
-	end
 	local gun = gunName and char:FindFirstChild(gunName)
 	if not gun then
 		-- Gun fora da mão: equipa só quando preciso e atira no próximo ciclo.
@@ -6281,10 +6429,21 @@ end
 getgenv().SpamGunSkullGuitar = function(E)
 	local l, Q = require(m.CombatUtil), t.Character
 	local m = Q and (Q:FindFirstChild("Skull Guitar"))
-	if not m or (l:IsGunReloading(m)) then
+	if not m or not E then
 		return
 	end
-	m.RemoteEvent:FireServer("TAP", E.Position)
+	-- Skull Guitar: usa somente o RemoteEvent da skill, sem mouse físico.
+	-- Mantém a checagem de reload para não enviar TAP enquanto a arma recarrega.
+	if l:IsGunReloading(m) then
+		return
+	end
+	local position = E.Position
+	pcall(function()
+		local remote = m:FindFirstChild("RemoteEvent")
+		if remote then
+			remote:FireServer("TAP", position)
+		end
+	end)
 end
 local function m(E, l)
 	local Q, d, I, _, o, V, N =
@@ -12391,56 +12550,6 @@ SettingSeaEventSection.CreateDropdown(
 	end
 )
 -- M1 físico da Dragonstorm: não mexe nos Remotes normais, só faz o toque que você faria na tela.
-getgenv().__DSClickGen = (getgenv().__DSClickGen or 0) + 1
-task.spawn(function()
-	local MyGen = getgenv().__DSClickGen
-	while task.wait(2) and getgenv().__DSClickGen == MyGen do
-		pcall(function()
-			if not Settings["Auto Use M1 DragonStorm For Sea Events"] then
-				return
-			end
-			-- Só funciona depois que o Auto Sea Event estiver ativo.
-			if not Settings["Auto Sea Event"] then
-				return
-			end
-			local Character = t.Character
-			local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-			if not Humanoid or Humanoid.Health <= 0 then
-				return
-			end
-			local Tool = Character:FindFirstChild("Dragonstorm")
-			if not Tool then
-				if not t.Backpack:FindFirstChild("Dragonstorm") then
-					return -- sem Dragonstorm: não clica à toa na tela
-				end
-				-- Só puxa a Dragonstorm quando preciso: se o farm está com outra arma na mão
-				-- (e nenhum modo de Dragonstorm está ligado), não troca de arma.
-				local holding = nil
-				for _, v in ipairs(Character:GetChildren()) do
-					if v:IsA("Tool") then
-						holding = v
-						break
-					end
-				end
-				local dsMode = Settings["Use Dragonstorm For Sea Event"]
-					or Settings["Auto Use Dragon Storm For All Sea Events"]
-					or Settings["Auto Change Dragonstorm With Skull Guitar"]
-					or Settings["Auto Change Dragonstorm When Kill Boat"]
-					or Settings["Kill Aura With DragonStorm"]
-				if holding and not dsMode then
-					return
-				end
-				EquipOnlyIfNeeded("Dragonstorm", 1.5)
-				task.wait(0.3)
-				Tool = Character:FindFirstChild("Dragonstorm")
-				if not Tool then
-					return
-				end
-			end
-			DragonstormPhysicalClick(true)
-		end)
-	end
-end)
 SettingSeaEventSection.CreateToggle(
 	{
 		Title = "Use Dragonstorm For Sea Event",
@@ -12469,16 +12578,6 @@ SettingSeaEventSection.CreateToggle(
 	},
 	function(l)
 		SaveSettings("Auto Use Dragon Storm For All Sea Events", l)
-	end
-)
-SettingSeaEventSection.CreateToggle(
-	{
-		Title = "Use M1 DragonStorm",
-		Desc = "Equips Dragonstorm and taps the screen center every 2s. Only works while Auto Sea Event is ON.",
-		Default = Settings["Auto Use M1 DragonStorm For Sea Events"] or false,
-	},
-	function(l)
-		SaveSettings("Auto Use M1 DragonStorm For Sea Events", l)
 	end
 )
 SettingSeaEventSection.CreateToggle(
@@ -14394,6 +14493,15 @@ function AutoAttackLeviathan()
 					if t.Character:FindFirstChild(b) and (t.Character[b]:FindFirstChild("LeftClickRemote")) then
 						getgenv().UseFruitM1(s, true)
 					end
+				elseif Settings["Use Click M1 DragonStorm Leviathan"] then
+					equiptool("Dragonstorm")
+					if t.Character:FindFirstChild("Dragonstorm") then
+						DragonstormPhysicalClick(true)
+						SpamGunDragonStorm(s.Hitbox11)
+						if t:DistanceFromCharacter(s.Hitbox11.Position) < 400 then
+							UseDragonstormSkill()
+						end
+					end
 				elseif Settings["Use Click M1 Skull Guitar Leviathan"] then
 					equiptool(NameWeapon("Gun"))
 					SpamGunSkullGuitar(s.Hitbox11)
@@ -14437,6 +14545,15 @@ function AutoAttackLeviathan()
 				local X = NameWeapon("Blox Fruit")
 				if t.Character:FindFirstChild(X) and (t.Character[X]:FindFirstChild("LeftClickRemote")) then
 					getgenv().UseFruitM1(b, true)
+				end
+			elseif Settings["Use Click M1 DragonStorm Leviathan"] then
+				equiptool("Dragonstorm")
+				if t.Character:FindFirstChild("Dragonstorm") then
+					DragonstormPhysicalClick(true)
+					SpamGunDragonStorm(b.Hitbox11)
+					if t:DistanceFromCharacter(b.Hitbox11.Position) < 400 then
+						UseDragonstormSkill()
+					end
 				end
 			elseif Settings["Use Click M1 Skull Guitar Leviathan"] then
 				equiptool(NameWeapon("Gun"))
@@ -14608,6 +14725,12 @@ LeviathanEventSection.CreateToggle(
 	{ Title = "Use Click M1 Fruit Leviathan", Desc = nil, Default = Settings["Use Click M1 Fruit Leviathan"] or false },
 	function(b)
 		SaveSettings("Use Click M1 Fruit Leviathan", b)
+	end
+)
+LeviathanEventSection.CreateToggle(
+	{ Title = "Use Click M1 DragonStorm Leviathan", Desc = nil, Default = Settings["Use Click M1 DragonStorm Leviathan"] or false },
+	function(b)
+		SaveSettings("Use Click M1 DragonStorm Leviathan", b)
 	end
 )
 LeviathanEventSection.CreateToggle(
