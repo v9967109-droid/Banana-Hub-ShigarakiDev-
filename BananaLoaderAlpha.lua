@@ -6147,8 +6147,27 @@ end
 -- e VirtualUser como reforço. É o MESMO clique usado pelo "Auto Use M1 DragonStorm For Sea Events"
 -- e agora também pelo Farm normal e pelo Auto Use DragonStorm For ALL Sea Event.
 function DragonstormPhysicalClick(force)
-	-- Mantido por compatibilidade com as chamadas existentes.
-	-- O click físico foi desativado; Dragonstorm agora usa somente o disparo remoto.
+	-- Toque virtual na tela, sem mouse, no máximo 1 vez a cada 2 segundos.
+	-- O disparo remoto da Dragonstorm continua sendo executado separadamente.
+	local now = os.clock()
+	local last = getgenv().__DragonStormTouchLast or 0
+	if not force and now - last < 2 then
+		return true
+	end
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return true
+	end
+	local viewport = camera.ViewportSize
+	local position = Vector2.new(viewport.X * 0.5, viewport.Y * 0.5)
+	local vim = game:GetService("VirtualInputManager")
+	if vim and vim.SendTouchEvent then
+		getgenv().__DragonStormTouchLast = now
+		pcall(function()
+			vim:SendTouchEvent(1, Enum.UserInputState.Begin, position)
+			vim:SendTouchEvent(1, Enum.UserInputState.End, position)
+		end)
+	end
 	return true
 end
 function ShootM1(E)
