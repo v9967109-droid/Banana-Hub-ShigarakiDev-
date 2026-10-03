@@ -6147,30 +6147,8 @@ end
 -- e VirtualUser como reforço. É o MESMO clique usado pelo "Auto Use M1 DragonStorm For Sea Events"
 -- e agora também pelo Farm normal e pelo Auto Use DragonStorm For ALL Sea Event.
 function DragonstormPhysicalClick(force)
-	local now = os.clock()
-	if not force and now - (getgenv().__DSClickLast or 0) < 2 then
-		return false
-	end
-	getgenv().__DSClickLast = now
-	task.spawn(function()
-		pcall(function()
-			local Camera = workspace.CurrentCamera
-			if not Camera then
-				return
-			end
-			local vp = Camera.ViewportSize
-			local x, y = vp.X / 2, vp.Y / 2
-			local VIM = game:GetService("VirtualInputManager")
-			VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
-			task.wait(0.05)
-			VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
-			pcall(function()
-				local VU = game:GetService("VirtualUser")
-				VU:CaptureController()
-				VU:ClickButton1(Vector2.new(x, y))
-			end)
-		end)
-	end)
+	-- Mantido por compatibilidade com as chamadas existentes.
+	-- O click físico foi desativado; Dragonstorm agora usa somente o disparo remoto.
 	return true
 end
 function ShootM1(E)
@@ -6215,6 +6193,16 @@ function ShootM1(E)
 	-- Same guard as the melee attack: no shots while stunned.
 	local stun = char:FindFirstChild("Stun")
 	if stun and stun.Value ~= 0 then
+		return true
+	end
+	-- Dragonstorm: somente disparo remoto. O M1Turbo/loops de farm chamam
+	-- ShootM1 continuamente, então não existe mais intervalo fixo de 2 segundos.
+	if gunName == "Dragonstorm" then
+		if getgenv().SpamGunDragonStorm then
+			pcall(function()
+				getgenv().SpamGunDragonStorm(targetPart or { Position = targetPos })
+			end)
+		end
 		return true
 	end
 	-- No cooldown / no reload check, only a small floor so the remotes do not flood.
