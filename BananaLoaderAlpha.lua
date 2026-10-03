@@ -4532,19 +4532,38 @@ function ToggleNoclip()
 		end
 	end
 end
+-- Noclip otimizado: guarda a lista de partes e só a atualiza a cada 0.6s
+-- (antes percorria todo o personagem com GetDescendants a cada frame, em dois lugares).
+function NoclipApply()
+	local Character = t.Character
+	if not Character then
+		return
+	end
+	local cache = getgenv().__NoclipCache
+	if not cache or cache.char ~= Character or os.clock() - cache.t > 0.6 then
+		local parts = {}
+		for _, p in ipairs(Character:GetDescendants()) do
+			if p:IsA("BasePart") then
+				parts[#parts + 1] = p
+			end
+		end
+		cache = { char = Character, t = os.clock(), parts = parts }
+		getgenv().__NoclipCache = cache
+	end
+	local parts = cache.parts
+	for i = 1, #parts do
+		local p = parts[i]
+		if p.CanCollide then
+			p.CanCollide = false
+		end
+	end
+end
 -- Character + equipped Tool noclip enforcement.
 do
     task.spawn(function()
-        while task.wait() do
+        while task.wait(0.1) do
             if ToggleNoclip() then
-                local Character = t.Character
-                if Character then
-                    for _, Part in ipairs(Character:GetDescendants()) do
-                        if Part:IsA("BasePart") then
-                            Part.CanCollide = false
-                        end
-                    end
-                end
+                NoclipApply()
             end
         end
     end)
@@ -6143,28 +6162,45 @@ function EquipOnlyIfNeeded(toolName, interval)
 	hum:EquipTool(bp)
 	return false -- vai atirar no próximo ciclo
 end
--- Clique da Dragonstorm (canto superior da tela, a cada 2s).
--- O disparo remoto da Dragonstorm continua sendo executado separadamente.
--- Este clique usa a API de mouse do executor somente como fallback/entrada física,
--- sempre reposicionando o cursor para o canto superior antes de clicar.
+-- Clique da Dragonstorm: o mouse vai RETO para o TOPO da tela (centro horizontal, y no topo)
+-- e dá um clique a cada 2 segundos. O disparo remoto da Dragonstorm continua separado.
+-- Principal: VirtualInputManager (move o mouse + clique). Reforço: VirtualUser.
+-- Fallback: mousemoveabs/mouse1click do executor, só se o VirtualInputManager falhar.
 function DragonstormPhysicalClick(force)
 	local now = os.clock()
 	local last = getgenv().__DragonStormMouseClickLast or 0
 	if not force and now - last < 2 then
 		return true
 	end
-
-	if type(mousemoveabs) == "function" and type(mouse1click) == "function" then
-		getgenv().__DragonStormMouseClickLast = now
-		pcall(function()
-			mousemoveabs(2, 2)
-			mouse1click()
+	getgenv().__DragonStormMouseClickLast = now
+	task.spawn(function()
+		local Camera = workspace.CurrentCamera
+		local vp = Camera and Camera.ViewportSize or Vector2.new(1280, 720)
+		local x, y = math.floor(vp.X / 2), 2 -- topo da tela, centralizado na horizontal
+		local okVIM = pcall(function()
+			local VIM = game:GetService("VirtualInputManager")
+			VIM:SendMouseMoveEvent(x, y, game)
+			task.wait(0.03)
+			VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
+			task.wait(0.05)
+			VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
 		end)
-	elseif type(mouse1click) == "function" then
-		-- Se o executor não oferecer posicionamento absoluto, mantém o clique pelo método existente.
-		getgenv().__DragonStormMouseClickLast = now
-		pcall(mouse1click)
-	end
+		pcall(function()
+			local VU = game:GetService("VirtualUser")
+			VU:CaptureController()
+			VU:ClickButton1(Vector2.new(x, y))
+		end)
+		if not okVIM then
+			pcall(function()
+				if type(mousemoveabs) == "function" then
+					mousemoveabs(x, y)
+				end
+				if type(mouse1click) == "function" then
+					mouse1click()
+				end
+			end)
+		end
+	end)
 	return true
 end
 function ShootM1(E)
@@ -8668,11 +8704,9 @@ do
 		end
 	end
 	getgenv().__PirateWarnConn = t:WaitForChild("PlayerGui").DescendantAdded:Connect(function(obj)
-		if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-			CheckWarn(obj)
-			obj:GetPropertyChangedSignal("Text"):Connect(function()
-				CheckWarn(obj)
-			end)
+		-- Só olha quando o Auto Pirate Raid está ligado e sem criar conexão por objeto.
+		if Settings["Auto Pirate Raid"] and (obj:IsA("TextLabel") or obj:IsA("TextButton")) then
+			task.defer(CheckWarn, obj)
 		end
 	end)
 end
@@ -12405,57 +12439,6 @@ SettingSeaEventSection.CreateDropdown(
 		SaveSettings("Select Weapons Use Skill", l, y)
 	end
 )
--- M1 físico da Dragonstorm: não mexe nos Remotes normais, só faz o toque que você faria na tela.
-getgenv().__DSClickGen = (getgenv().__DSClickGen or 0) + 1
-task.spawn(function()
-	local MyGen = getgenv().__DSClickGen
-	while task.wait(2) and getgenv().__DSClickGen == MyGen do
-		pcall(function()
-			if not Settings["Auto Use M1 DragonStorm For Sea Events"] then
-				return
-			end
-			-- Só funciona depois que o Auto Sea Event estiver ativo.
-			if not Settings["Auto Sea Event"] then
-				return
-			end
-			local Character = t.Character
-			local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-			if not Humanoid or Humanoid.Health <= 0 then
-				return
-			end
-			local Tool = Character:FindFirstChild("Dragonstorm")
-			if not Tool then
-				if not t.Backpack:FindFirstChild("Dragonstorm") then
-					return -- sem Dragonstorm: não clica à toa na tela
-				end
-				-- Só puxa a Dragonstorm quando preciso: se o farm está com outra arma na mão
-				-- (e nenhum modo de Dragonstorm está ligado), não troca de arma.
-				local holding = nil
-				for _, v in ipairs(Character:GetChildren()) do
-					if v:IsA("Tool") then
-						holding = v
-						break
-					end
-				end
-				local dsMode = Settings["Use Dragonstorm For Sea Event"]
-					or Settings["Auto Use Dragon Storm For All Sea Events"]
-					or Settings["Auto Change Dragonstorm With Skull Guitar"]
-					or Settings["Auto Change Dragonstorm When Kill Boat"]
-					or Settings["Kill Aura With DragonStorm"]
-				if holding and not dsMode then
-					return
-				end
-				EquipOnlyIfNeeded("Dragonstorm", 1.5)
-				task.wait(0.3)
-				Tool = Character:FindFirstChild("Dragonstorm")
-				if not Tool then
-					return
-				end
-			end
-			DragonstormPhysicalClick(true)
-		end)
-	end
-end)
 SettingSeaEventSection.CreateToggle(
 	{
 		Title = "Use Dragonstorm For Sea Event",
@@ -15050,12 +15033,15 @@ local function X(I, _)
 			if g.Z < 0 then
 				l.Velocity = l.Velocity - P.CFrame.LookVector * (g.Z * ((_ and vehicleflyspeed or iyflyspeed) * 50))
 			end
-			J.MouseButton1Click:Connect(function()
-				l.Velocity = Vector3.new(0, -20, 0)
-			end)
-			H.MouseButton1Click:Connect(function()
-				l.Velocity = Vector3.new(0, 20, 0)
-			end)
+			if not l:GetAttribute("__BtnConnected") then
+				l:SetAttribute("__BtnConnected", true)
+				J.MouseButton1Click:Connect(function()
+					l.Velocity = Vector3.new(0, -20, 0)
+				end)
+				H.MouseButton1Click:Connect(function()
+					l.Velocity = Vector3.new(0, 20, 0)
+				end)
+			end
 		end
 	end)
 end
@@ -22434,6 +22420,9 @@ getgenv().__MoveStepConn = game:GetService("RunService").Stepped:Connect(functio
 	if getgenv().__MoveGen ~= MoveGen then
 		return
 	end
+	if getgenv().__WSEarlyConn then
+		return -- a conexão junto da UI já aplica a velocidade
+	end
 	if Settings["Change WalkSpeed"] then
 		local Character = t.Character
 		local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
@@ -22519,9 +22508,12 @@ do
 	lastHopTick = tick()
 	lastFruitTick = tick()
 	getgenv().BananaCatMainLoopConn = x.RenderStepped:Connect(function()
-		pcall(function()
-			sethiddenproperty(t, "SimulationRadius", 5000)
-		end)
+		if tick() - (getgenv().__SimLast or 0) > 1 then
+			getgenv().__SimLast = tick()
+			pcall(function()
+				sethiddenproperty(t, "SimulationRadius", 5000)
+			end)
+		end
 		if tick() - lastHopTick >= 500 then
 			lastHopTick = tick()
 			pcall(function()
@@ -22530,9 +22522,17 @@ do
 		end
 		pcall(function()
 			if Settings["Auto Aimbot"] then
-				local T = if Settings["Select Method Aimbot"] == "Select Player"
-					then workspace.Characters[Settings["Select Player PVP"]]
-					else (ClosestPartaimbot())
+				local T
+				if Settings["Select Method Aimbot"] == "Select Player" then
+					T = workspace.Characters[Settings["Select Player PVP"]]
+				else
+					local cached = getgenv().__AimTarget
+					if tick() - (getgenv().__AimScan or 0) > 0.1 or not cached or not cached.Parent then
+						getgenv().__AimScan = tick()
+						getgenv().__AimTarget = ClosestPartaimbot()
+					end
+					T = getgenv().__AimTarget
+				end
 				if T and (T:FindFirstChild("HumanoidRootPart")) then
 					local b = workspace.CurrentCamera
 					G.Hit = T.HumanoidRootPart.CFrame
@@ -22551,18 +22551,14 @@ do
 			end
 			local Character = t.Character
 			if Character and (ToggleNoclip() or Settings.Noclip) then
-				for _, part in ipairs(Character:GetDescendants()) do
-					if part:IsA("BasePart") then
-						part.CanCollide = false
-					end
-				end
+				NoclipApply()
 			end
 		end)
 		-- Segurança: se uma chamada de fruta travar, libera depois de 30s.
 		if getgenv().__FruitBusy and tick() - lastFruitTick > 30 then
 			getgenv().__FruitBusy = false
 		end
-		if tick() - lastFruitTick >= 0.5 and not getgenv().__FruitBusy then
+		if tick() - lastFruitTick >= 1 and not getgenv().__FruitBusy then
 			lastFruitTick = tick()
 			getgenv().__FruitBusy = true
 			local T, T = pcall(function()
