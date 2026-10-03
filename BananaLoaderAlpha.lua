@@ -6143,30 +6143,27 @@ function EquipOnlyIfNeeded(toolName, interval)
 	hum:EquipTool(bp)
 	return false -- vai atirar no próximo ciclo
 end
--- Clique físico da Dragonstorm (centro da tela, a cada 2s): VirtualInputManager como principal
--- e VirtualUser como reforço. É o MESMO clique usado pelo "Auto Use M1 DragonStorm For Sea Events"
--- e agora também pelo Farm normal e pelo Auto Use DragonStorm For ALL Sea Event.
+-- Clique da Dragonstorm (canto superior da tela, a cada 2s).
+-- O disparo remoto da Dragonstorm continua sendo executado separadamente.
+-- Este clique usa a API de mouse do executor somente como fallback/entrada física,
+-- sempre reposicionando o cursor para o canto superior antes de clicar.
 function DragonstormPhysicalClick(force)
-	-- Toque virtual na tela, sem mouse, no máximo 1 vez a cada 2 segundos.
-	-- O disparo remoto da Dragonstorm continua sendo executado separadamente.
 	local now = os.clock()
-	local last = getgenv().__DragonStormTouchLast or 0
+	local last = getgenv().__DragonStormMouseClickLast or 0
 	if not force and now - last < 2 then
 		return true
 	end
-	local camera = workspace.CurrentCamera
-	if not camera then
-		return true
-	end
-	local viewport = camera.ViewportSize
-	local position = Vector2.new(viewport.X * 0.5, viewport.Y * 0.5)
-	local vim = game:GetService("VirtualInputManager")
-	if vim and vim.SendTouchEvent then
-		getgenv().__DragonStormTouchLast = now
+
+	if type(mousemoveabs) == "function" and type(mouse1click) == "function" then
+		getgenv().__DragonStormMouseClickLast = now
 		pcall(function()
-			vim:SendTouchEvent(1, Enum.UserInputState.Begin, position)
-			vim:SendTouchEvent(1, Enum.UserInputState.End, position)
+			mousemoveabs(2, 2)
+			mouse1click()
 		end)
+	elseif type(mouse1click) == "function" then
+		-- Se o executor não oferecer posicionamento absoluto, mantém o clique pelo método existente.
+		getgenv().__DragonStormMouseClickLast = now
+		pcall(mouse1click)
 	end
 	return true
 end
