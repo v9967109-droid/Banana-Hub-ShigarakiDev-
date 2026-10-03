@@ -4532,38 +4532,19 @@ function ToggleNoclip()
 		end
 	end
 end
--- Noclip otimizado: guarda a lista de partes e só a atualiza a cada 0.6s
--- (antes percorria todo o personagem com GetDescendants a cada frame, em dois lugares).
-function NoclipApply()
-	local Character = t.Character
-	if not Character then
-		return
-	end
-	local cache = getgenv().__NoclipCache
-	if not cache or cache.char ~= Character or os.clock() - cache.t > 0.6 then
-		local parts = {}
-		for _, p in ipairs(Character:GetDescendants()) do
-			if p:IsA("BasePart") then
-				parts[#parts + 1] = p
-			end
-		end
-		cache = { char = Character, t = os.clock(), parts = parts }
-		getgenv().__NoclipCache = cache
-	end
-	local parts = cache.parts
-	for i = 1, #parts do
-		local p = parts[i]
-		if p.CanCollide then
-			p.CanCollide = false
-		end
-	end
-end
 -- Character + equipped Tool noclip enforcement.
 do
     task.spawn(function()
-        while task.wait(0.1) do
+        while task.wait() do
             if ToggleNoclip() then
-                NoclipApply()
+                local Character = t.Character
+                if Character then
+                    for _, Part in ipairs(Character:GetDescendants()) do
+                        if Part:IsA("BasePart") then
+                            Part.CanCollide = false
+                        end
+                    end
+                end
             end
         end
     end)
@@ -6162,44 +6143,33 @@ function EquipOnlyIfNeeded(toolName, interval)
 	hum:EquipTool(bp)
 	return false -- vai atirar no próximo ciclo
 end
--- Clique da Dragonstorm: o mouse vai RETO para o TOPO da tela (centro horizontal, y no topo)
--- e dá um clique a cada 2 segundos. O disparo remoto da Dragonstorm continua separado.
--- Principal: VirtualInputManager (move o mouse + clique). Reforço: VirtualUser.
--- Fallback: mousemoveabs/mouse1click do executor, só se o VirtualInputManager falhar.
 function DragonstormPhysicalClick(force)
 	local now = os.clock()
-	local last = getgenv().__DragonStormMouseClickLast or 0
-	if not force and now - last < 2 then
-		return true
+	if not force and now - (getgenv().__DSClickLast or 0) < 2 then
+		return false
 	end
-	getgenv().__DragonStormMouseClickLast = now
+	getgenv().__DSClickLast = now
 	task.spawn(function()
-		local Camera = workspace.CurrentCamera
-		local vp = Camera and Camera.ViewportSize or Vector2.new(1280, 720)
-		local x, y = math.floor(vp.X / 2), 2 -- topo da tela, centralizado na horizontal
-		local okVIM = pcall(function()
+		pcall(function()
+			local Camera = workspace.CurrentCamera
+			if not Camera then
+				return
+			end
+			local vp = Camera.ViewportSize
+			-- Mouse reto para o TOPO da tela (centro horizontal) antes de clicar.
+			local x, y = math.floor(vp.X / 2), 2
 			local VIM = game:GetService("VirtualInputManager")
 			VIM:SendMouseMoveEvent(x, y, game)
 			task.wait(0.03)
 			VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
 			task.wait(0.05)
 			VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
-		end)
-		pcall(function()
-			local VU = game:GetService("VirtualUser")
-			VU:CaptureController()
-			VU:ClickButton1(Vector2.new(x, y))
-		end)
-		if not okVIM then
 			pcall(function()
-				if type(mousemoveabs) == "function" then
-					mousemoveabs(x, y)
-				end
-				if type(mouse1click) == "function" then
-					mouse1click()
-				end
+				local VU = game:GetService("VirtualUser")
+				VU:CaptureController()
+				VU:ClickButton1(Vector2.new(x, y))
 			end)
-		end
+		end)
 	end)
 	return true
 end
@@ -6209,13 +6179,6 @@ function ShootM1(E)
 		return false
 	end
 	local gunName = NameWeapon("Gun")
-	-- Com o M1 da Dragonstorm ligado e o Auto Sea Event ativo, a Gun do farm é a Dragonstorm.
-	if Settings["Auto Use M1 DragonStorm For Sea Events"]
-		and Settings["Auto Sea Event"]
-		and (t.Backpack:FindFirstChild("Dragonstorm") or char:FindFirstChild("Dragonstorm"))
-	then
-		gunName = "Dragonstorm"
-	end
 	local gun = gunName and char:FindFirstChild(gunName)
 	if not gun then
 		-- Gun fora da mão: equipa só quando preciso e atira no próximo ciclo.
@@ -6245,16 +6208,6 @@ function ShootM1(E)
 	-- Same guard as the melee attack: no shots while stunned.
 	local stun = char:FindFirstChild("Stun")
 	if stun and stun.Value ~= 0 then
-		return true
-	end
-	-- Dragonstorm: somente disparo remoto. O M1Turbo/loops de farm chamam
-	-- ShootM1 continuamente, então não existe mais intervalo fixo de 2 segundos.
-	if gunName == "Dragonstorm" then
-		if getgenv().SpamGunDragonStorm then
-			pcall(function()
-				getgenv().SpamGunDragonStorm(targetPart or { Position = targetPos })
-			end)
-		end
 		return true
 	end
 	-- No cooldown / no reload check, only a small floor so the remotes do not flood.
@@ -6318,10 +6271,21 @@ end
 getgenv().SpamGunSkullGuitar = function(E)
 	local l, Q = require(m.CombatUtil), t.Character
 	local m = Q and (Q:FindFirstChild("Skull Guitar"))
-	if not m or (l:IsGunReloading(m)) then
+	if not m or not E then
 		return
 	end
-	m.RemoteEvent:FireServer("TAP", E.Position)
+	-- Skull Guitar: usa somente o RemoteEvent da skill, sem mouse físico.
+	-- Mantém a checagem de reload para não enviar TAP enquanto a arma recarrega.
+	if l:IsGunReloading(m) then
+		return
+	end
+	local position = E.Position
+	pcall(function()
+		local remote = m:FindFirstChild("RemoteEvent")
+		if remote then
+			remote:FireServer("TAP", position)
+		end
+	end)
 end
 local function m(E, l)
 	local Q, d, I, _, o, V, N =
@@ -8290,7 +8254,7 @@ function GetPirateRaid(f)
 			and not string.find(V.Name, "Wraith")
 			and V.Name ~= "rip_indra True Form"
 			and (IsMobAlive(V))
-			and (V.HumanoidRootPart.Position - Vector3.new(-5502.1787109375, 323.6708984375, -2863.4616699219)).magnitude < 1000
+			and (V.HumanoidRootPart.Position - Vector3.new(-5543, 313, -2964)).magnitude < 1000
 		then
 			return V
 		end
@@ -8704,9 +8668,11 @@ do
 		end
 	end
 	getgenv().__PirateWarnConn = t:WaitForChild("PlayerGui").DescendantAdded:Connect(function(obj)
-		-- Só olha quando o Auto Pirate Raid está ligado e sem criar conexão por objeto.
-		if Settings["Auto Pirate Raid"] and (obj:IsA("TextLabel") or obj:IsA("TextButton")) then
-			task.defer(CheckWarn, obj)
+		if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+			CheckWarn(obj)
+			obj:GetPropertyChangedSignal("Text"):Connect(function()
+				CheckWarn(obj)
+			end)
 		end
 	end)
 end
@@ -9182,7 +9148,6 @@ task.spawn(function()
 			if Settings["Auto Elite Hunter"] then
 				local EliteRemote = game:GetService("ReplicatedStorage").Remotes.CommF_
 				local EliteNames = { "Deandre", "Urban", "Diablo" }
-
 				-- Lê qual elite é o alvo da missão atual (pelo título da missão).
 				local function GetEliteQuestName()
 					local found
@@ -9200,68 +9165,55 @@ task.spawn(function()
 					end)
 					return found
 				end
-
-				-- Procura o elite somente nas instâncias reais do mapa.
-				-- Alguns servidores colocam o modelo dentro de outra pasta do Enemies.
+				-- Procura o elite da missão: primeiro no mapa (Enemies), depois no ReplicatedStorage.
 				local function FindEliteByName(n)
-					local enemies = workspace:FindFirstChild("Enemies")
-					if not enemies then
+					if not n then
 						return nil
 					end
-
-					if n then
-						local m = enemies:FindFirstChild(n)
-						if m and m:IsA("Model") and IsMobAlive(m) then
-							return m
-						end
-
-						for _, m in ipairs(enemies:GetDescendants()) do
-							if m:IsA("Model") and m.Name == n and IsMobAlive(m) then
-								return m
-							end
-						end
+					local m = workspace.Enemies:FindFirstChild(n)
+					if m and m:IsA("Model") and IsMobAlive(m) then
+						return m
 					end
-
-					return nil
+					m = game:GetService("ReplicatedStorage"):FindFirstChild(n)
+					if m and m:IsA("Model") and IsMobAlive(m) then
+						return m
+					end
 				end
-
 				local questName = GetEliteQuestName()
-
-				-- Se ainda não houver missão, pede uma e dá tempo para o servidor atualizar a GUI/alvo.
-				if not questName then
-					EliteRequest()
-					task.wait(0.25)
+				if not questName and tick() - (getgenv().__EliteReq or 0) > 5 then
+					-- Sem missão de elite: pede uma (é ela que faz o elite aparecer).
+					getgenv().__EliteReq = tick()
+					pcall(function()
+						EliteRemote:InvokeServer("EliteHunter")
+					end)
+					task.wait(2)
 					questName = GetEliteQuestName()
 				end
-
-				-- Procura primeiro o alvo da missão e, como fallback, qualquer Elite Hunter ativo.
 				local y = FindEliteByName(questName)
-				if not y then
-					y = DetectEliteHunter()
-					if y and questName and y.Name ~= questName then
-						local questTarget = FindEliteByName(questName)
-						if questTarget then
-							y = questTarget
+				if not y and not questName then
+					-- Título da missão não trouxe o nome: usa o elite detectado (mapa antes do ReplicatedStorage).
+					for _, n in ipairs(EliteNames) do
+						y = FindEliteByName(n)
+						if y then
+							break
 						end
 					end
 				end
-
 				if y then
 					StackFarm = false
 					StackFarmOther = false
 					getgenv().__EliteLost = nil
-
 					local engagedName = y.Name
 					repeat
 						task.wait()
-
-						-- Reencontra o NPC a cada ciclo para evitar ficar parado
-						-- quando a instância do Elite muda/carrega no mapa.
-						if not y.Parent or not y:FindFirstChild("HumanoidRootPart") or not IsMobAlive(y) then
-							y = FindEliteByName(engagedName) or DetectEliteHunter()
+						-- O elite pode trocar de instância (ReplicatedStorage -> mapa) ao chegar perto.
+						if not y.Parent or not y:FindFirstChild("HumanoidRootPart") then
+							y = FindEliteByName(engagedName)
+							if not y then
+								break
+							end
 						end
-
-						if y and y:FindFirstChild("HumanoidRootPart") and IsMobAlive(y) then
+						if y.Parent == workspace.Enemies then
 							sizepart(y)
 							if Settings["Select Weapon"] == "Blox Fruit" then
 								toTarget(y.HumanoidRootPart.CFrame * CFrame.new(-7, 20, 0))
@@ -9270,11 +9222,11 @@ task.spawn(function()
 							end
 							ClickM1(y)
 							UsedualFlock()
+						else
+							-- Ainda não carregou no mapa: voa até a posição do elite.
+							toTarget(y.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
 						end
-					until not Settings["Auto Elite Hunter"]
-						or not y
-						or not IsMobAlive(y)
-
+					until not Settings["Auto Elite Hunter"] or not IsMobAlive(y) and not FindEliteByName(engagedName)
 					if not IsMobAlive(y) and getgenv().QuestTrainer and getgenv().QuestTrainer.CountKillMob then
 						getgenv().QuestTrainer.CountKillMob = getgenv().QuestTrainer.CountKillMob + 1
 					end
@@ -9340,7 +9292,7 @@ task.spawn(function()
 					StackFarm = false
 					StackFarmOther = false
 					getgenv().DetectRaidCastle = true
-					toTarget(CFrame.new(-5502.1787109375, 323.6708984375, -2863.4616699219))
+					toTarget(CFrame.new(-5543, 313, -2964))
 				end
 			end
 			if Settings["Teleport To Fruit"] then
@@ -12439,6 +12391,7 @@ SettingSeaEventSection.CreateDropdown(
 		SaveSettings("Select Weapons Use Skill", l, y)
 	end
 )
+-- M1 físico da Dragonstorm: não mexe nos Remotes normais, só faz o toque que você faria na tela.
 SettingSeaEventSection.CreateToggle(
 	{
 		Title = "Use Dragonstorm For Sea Event",
@@ -14382,6 +14335,15 @@ function AutoAttackLeviathan()
 					if t.Character:FindFirstChild(b) and (t.Character[b]:FindFirstChild("LeftClickRemote")) then
 						getgenv().UseFruitM1(s, true)
 					end
+				elseif Settings["Use Click DragonStorm Leviathan"] then
+					equiptool("Dragonstorm")
+					if t.Character:FindFirstChild("Dragonstorm") then
+						DragonstormPhysicalClick(true)
+						SpamGunDragonStorm(s.Hitbox11)
+						if t:DistanceFromCharacter(s.Hitbox11.Position) < 400 then
+							UseDragonstormSkill()
+						end
+					end
 				elseif Settings["Use Click M1 Skull Guitar Leviathan"] then
 					equiptool(NameWeapon("Gun"))
 					SpamGunSkullGuitar(s.Hitbox11)
@@ -14425,6 +14387,15 @@ function AutoAttackLeviathan()
 				local X = NameWeapon("Blox Fruit")
 				if t.Character:FindFirstChild(X) and (t.Character[X]:FindFirstChild("LeftClickRemote")) then
 					getgenv().UseFruitM1(b, true)
+				end
+			elseif Settings["Use Click DragonStorm Leviathan"] then
+				equiptool("Dragonstorm")
+				if t.Character:FindFirstChild("Dragonstorm") then
+					DragonstormPhysicalClick(true)
+					SpamGunDragonStorm(b.Hitbox11)
+					if t:DistanceFromCharacter(b.Hitbox11.Position) < 400 then
+						UseDragonstormSkill()
+					end
 				end
 			elseif Settings["Use Click M1 Skull Guitar Leviathan"] then
 				equiptool(NameWeapon("Gun"))
@@ -14596,6 +14567,12 @@ LeviathanEventSection.CreateToggle(
 	{ Title = "Use Click M1 Fruit Leviathan", Desc = nil, Default = Settings["Use Click M1 Fruit Leviathan"] or false },
 	function(b)
 		SaveSettings("Use Click M1 Fruit Leviathan", b)
+	end
+)
+LeviathanEventSection.CreateToggle(
+	{ Title = "Use Click DragonStorm Leviathan", Desc = nil, Default = Settings["Use Click DragonStorm Leviathan"] or false },
+	function(b)
+		SaveSettings("Use Click DragonStorm Leviathan", b)
 	end
 )
 LeviathanEventSection.CreateToggle(
@@ -15033,15 +15010,12 @@ local function X(I, _)
 			if g.Z < 0 then
 				l.Velocity = l.Velocity - P.CFrame.LookVector * (g.Z * ((_ and vehicleflyspeed or iyflyspeed) * 50))
 			end
-			if not l:GetAttribute("__BtnConnected") then
-				l:SetAttribute("__BtnConnected", true)
-				J.MouseButton1Click:Connect(function()
-					l.Velocity = Vector3.new(0, -20, 0)
-				end)
-				H.MouseButton1Click:Connect(function()
-					l.Velocity = Vector3.new(0, 20, 0)
-				end)
-			end
+			J.MouseButton1Click:Connect(function()
+				l.Velocity = Vector3.new(0, -20, 0)
+			end)
+			H.MouseButton1Click:Connect(function()
+				l.Velocity = Vector3.new(0, 20, 0)
+			end)
 		end
 	end)
 end
@@ -22420,9 +22394,6 @@ getgenv().__MoveStepConn = game:GetService("RunService").Stepped:Connect(functio
 	if getgenv().__MoveGen ~= MoveGen then
 		return
 	end
-	if getgenv().__WSEarlyConn then
-		return -- a conexão junto da UI já aplica a velocidade
-	end
 	if Settings["Change WalkSpeed"] then
 		local Character = t.Character
 		local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
@@ -22508,12 +22479,9 @@ do
 	lastHopTick = tick()
 	lastFruitTick = tick()
 	getgenv().BananaCatMainLoopConn = x.RenderStepped:Connect(function()
-		if tick() - (getgenv().__SimLast or 0) > 1 then
-			getgenv().__SimLast = tick()
-			pcall(function()
-				sethiddenproperty(t, "SimulationRadius", 5000)
-			end)
-		end
+		pcall(function()
+			sethiddenproperty(t, "SimulationRadius", 5000)
+		end)
 		if tick() - lastHopTick >= 500 then
 			lastHopTick = tick()
 			pcall(function()
@@ -22522,17 +22490,9 @@ do
 		end
 		pcall(function()
 			if Settings["Auto Aimbot"] then
-				local T
-				if Settings["Select Method Aimbot"] == "Select Player" then
-					T = workspace.Characters[Settings["Select Player PVP"]]
-				else
-					local cached = getgenv().__AimTarget
-					if tick() - (getgenv().__AimScan or 0) > 0.1 or not cached or not cached.Parent then
-						getgenv().__AimScan = tick()
-						getgenv().__AimTarget = ClosestPartaimbot()
-					end
-					T = getgenv().__AimTarget
-				end
+				local T = if Settings["Select Method Aimbot"] == "Select Player"
+					then workspace.Characters[Settings["Select Player PVP"]]
+					else (ClosestPartaimbot())
 				if T and (T:FindFirstChild("HumanoidRootPart")) then
 					local b = workspace.CurrentCamera
 					G.Hit = T.HumanoidRootPart.CFrame
@@ -22551,14 +22511,18 @@ do
 			end
 			local Character = t.Character
 			if Character and (ToggleNoclip() or Settings.Noclip) then
-				NoclipApply()
+				for _, part in ipairs(Character:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.CanCollide = false
+					end
+				end
 			end
 		end)
 		-- Segurança: se uma chamada de fruta travar, libera depois de 30s.
 		if getgenv().__FruitBusy and tick() - lastFruitTick > 30 then
 			getgenv().__FruitBusy = false
 		end
-		if tick() - lastFruitTick >= 1 and not getgenv().__FruitBusy then
+		if tick() - lastFruitTick >= 0.5 and not getgenv().__FruitBusy then
 			lastFruitTick = tick()
 			getgenv().__FruitBusy = true
 			local T, T = pcall(function()
@@ -22664,6 +22628,32 @@ getgenv().BananaCatFastAttackEnabled = Settings["Fast Attack"] == true
 getgenv().BananaCatSuperFastAttackEnabled = Settings["Super Fast Attack"] == true
 getgenv().BananaCatFastAttackOnce = BananaCatFastAttackOnce
 
+if SettingAutoFarmSection and type(SettingAutoFarmSection.CreateToggle) == "function" then
+    SettingAutoFarmSection.CreateToggle({
+        Title = "Fast Attack",
+        Desc = "Banana Cat historical Fast Attack",
+        Default = Settings["Fast Attack"] or false,
+    }, function(v)
+        Settings["Fast Attack"] = v and true or false
+        getgenv().BananaCatFastAttackEnabled = Settings["Fast Attack"]
+        SaveSettings("Fast Attack", Settings["Fast Attack"])
+    end)
+
+    SettingAutoFarmSection.CreateToggle({
+        Title = "Super Fast Attack",
+        Desc = "Banana Cat historical Super Fast Attack",
+        Default = Settings["Super Fast Attack"] or false,
+    }, function(v)
+        Settings["Super Fast Attack"] = v and true or false
+        getgenv().BananaCatSuperFastAttackEnabled = Settings["Super Fast Attack"]
+        if Settings["Super Fast Attack"] then
+            getgenv().BananaCatFastAttackEnabled = true
+            Settings["Fast Attack"] = true
+            SaveSettings("Fast Attack", true)
+        end
+        SaveSettings("Super Fast Attack", Settings["Super Fast Attack"])
+    end)
+end
 
 task.spawn(function()
     while task.wait() do
@@ -24875,6 +24865,35 @@ getgenv().Usefastattack = Settings["Fast Attack"] == true or getgenv().Usefastat
 getgenv().fastattect = getgenv().Usefastattack
 getgenv().SuperFastAttack = Settings["Super Fast Attack"] == true or getgenv().SuperFastAttack == true
 
+if SettingAutoFarmSection and type(SettingAutoFarmSection.CreateToggle) == "function" then
+    pcall(function()
+        SettingAutoFarmSection.CreateToggle({
+            Title = "Fast Attack",
+            Desc = "Fast Attack recovered from the Banana Cat / BF-MAIN source",
+            Default = Settings["Fast Attack"] == true,
+        }, function(Value)
+            getgenv().Usefastattack = Value == true
+            getgenv().fastattect = getgenv().Usefastattack
+            SaveSettings("Fast Attack", getgenv().Usefastattack)
+        end)
+    end)
+
+    pcall(function()
+        SettingAutoFarmSection.CreateToggle({
+            Title = "Super Fast Attack",
+            Desc = "Accelerated Fast Attack mode recovered from the Banana Cat / BF-MAIN source",
+            Default = Settings["Super Fast Attack"] == true,
+        }, function(Value)
+            getgenv().SuperFastAttack = Value == true
+            if getgenv().SuperFastAttack then
+                getgenv().Usefastattack = true
+                getgenv().fastattect = true
+            end
+            SaveSettings("Super Fast Attack", getgenv().SuperFastAttack)
+            SaveSettings("Fast Attack", getgenv().Usefastattack)
+        end)
+    end)
+end
 
 task.spawn(function()
     while task.wait() do
@@ -25514,77 +25533,3 @@ __PASS38_NAMED_FUNCTIONS = {
         if type(__fn) == "function" then rawset(_G, __name, __fn) end
     end
 end)()
-
-
--- COMPLETE FIX PACK: Sea Event, Skull Guitar click, Fruit TP, Elite Hunter, Pirate Raid.
-do
- local S={target=nil,search=0,boat=0,tp=0,hit=0,buying=false}
- local function part(v)return v and v.Parent and (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Engine") or v.PrimaryPart)end
- local function alive(v)
-  if not v or not v.Parent then return false end
-  local h=v:FindFirstChildWhichIsA("Humanoid"); if h then return h.Health>0 end
-  local hp=v:FindFirstChild("Health"); return (not hp or not hp:IsA("ValueBase") or hp.Value>0) and part(v)~=nil
- end
- local function selected()
-  if not StackFarmOther or not Settings["Auto Sea Event"] then return false end
-  for n,on in pairs(SafeMultiSelect("Select Sea Events"))do if on and n~="Only Farm Ship Brigade" then return true end end
-  return false
- end
- local function skullClick(v,p)
-  local char=t.Character; if not char then return end
-  local tool=char:FindFirstChild("Skull Guitar")
-  if not tool then
-   local bp=t.Backpack:FindFirstChild("Skull Guitar")
-   if bp then char:FindFirstChildOfClass("Humanoid"):EquipTool(bp); return end
-   pcall(function()game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("LoadItem","Skull Guitar")end); return
-  end
-  local remote=tool:FindFirstChild("RemoteEvent")
-  if remote then pcall(function()remote:FireServer("TAP",p.Position)end) end
- end
- function AutoSeabeast()
-  if not selected() then S.target=nil return end
-  local now=os.clock()
-  if not alive(S.target)then S.target=nil end
-  if not S.target and now-S.search>=.75 then S.search=now;local ok,v=pcall(DetectSeaEvents);if ok and alive(v)then S.target=v end end
-  if not S.target then
-   getgenv().PathSeaBeast=false;getgenv().PathTerrorshark=false;getgenv().PathSpinBoat=false
-   if not S.buying and now-S.boat>=5 then S.boat=now;S.buying=true;task.spawn(function()pcall(BuyBoatAndTeleBoat);task.wait(1);S.buying=false end)end
-   return
-  end
-  local v,p=S.target,part(S.target);if not p then S.target=nil return end
-  getgenv().PathSpinBoat=v;getgenv().PathSeaBeast=v.Name=="SeaBeast1" and v or false;getgenv().PathTerrorshark=v.Name=="Terrorshark" and v or false
-  if now-S.tp>=.45 then S.tp=now;pcall(TeleportSeaEvents,v)end
-  if now-S.hit<.12 or t:DistanceFromCharacter(p.Position)>500 then return end;S.hit=now
-  if Settings["Auto Use Dragon Storm For All Sea Events"] or Settings["Use Dragonstorm For Sea Event"] then
-   if typeof(EquipOnlyIfNeeded)=="function"then EquipOnlyIfNeeded("Dragonstorm",1.25)else equiptool("Dragonstorm")end
-   if typeof(SpamGunDragonStorm)=="function"then pcall(SpamGunDragonStorm,p)end
-  elseif Settings["Use Click M1 Skull Guitar For Sea Event"]then skullClick(v,p)
-  elseif Settings["Use Click M1 Fruit For Sea Event"] and typeof(getgenv().UseFruitM1)=="function"then pcall(getgenv().UseFruitM1,v)
-  else pcall(ClickM1,v,true)end
- end
- getgenv().AutoSeaEvent=AutoSeabeast
-end
-
-do
- local F={last=0,cached=nil}
- function GetPathFruit()
-  if F.cached and F.cached.Parent and F.cached:FindFirstChild("Handle",true)then return F.cached end
-  if os.clock()-F.last<.35 then return nil end;F.last=os.clock()
-  local root=t.Character and t.Character:FindFirstChild("HumanoidRootPart");local best,bd
-  for _,v in ipairs(workspace:GetDescendants())do
-   if (v:IsA("Tool")or v:IsA("Model"))and v.Name:find("Fruit",1,true)and not v:FindFirstChild("Ignored")then
-    local h=v:FindFirstChild("Handle",true);if h and h:IsA("BasePart")then local d=root and(h.Position-root.Position).Magnitude or 0;if not bd or d<bd then best,bd=v,d end end
-   end
-  end
-  F.cached=best;return best
- end
-end
-
-do
- local N={Deandre=true,Urban=true,Diablo=true}
- function DetectEliteHunter(wanted)
-  local root=t.Character and t.Character:FindFirstChild("HumanoidRootPart");local best,bd
-  local function scan(folder)if not folder then return end for _,v in ipairs(folder:GetDescendants())do if v:IsA("Model")and N[v.Name]and(not wanted or v.Name==wanted)and v:FindFirstChild("HumanoidRootPart")and IsMobAlive(v)then local d=root and(v.HumanoidRootPart.Position-root.Position).Magnitude or 0;if not bd or d<bd then best,bd=v,d end end end end
-  scan(workspace:FindFirstChild("Enemies"));scan(game:GetService("ReplicatedStorage"):FindFirstChild("Enemies"));return best
- end
-end
