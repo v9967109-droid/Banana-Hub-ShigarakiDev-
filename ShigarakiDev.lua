@@ -5353,427 +5353,6 @@ local function B(Z, C, J, F)
 	return r
 end
 
--- ===================== Portais físicos (Terceiro Mar) =====================
--- Cada rota usa o SEU portal; nunca há fallback para o portal de outra rota:
---   Castle>Tiki    = portal da ESQUERDA (laranja)
---   Castle>Mansion = portal do MEIO
---   Castle>Hydra   = portal da DIREITA
---   Tiki>Castle / Mansion>Castle / Hydra>Castle = portal físico da própria ilha
--- Entre duas ilhas: ilha atual -> portal dela -> Castle -> portal certo do Castle -> destino.
--- Um portal só é aceito se o NOME do objeto (ou do pai/avô) for de portal. TouchInterest,
--- proximidade e objetos genéricos (baús etc.) NUNCA são usados para escolher um portal.
--- Para fixar uma rota à mão: getgenv().PortalPads = { ["Castle>Tiki"] = Vector3.new(x, y, z), ... }
-getgenv().BananaPortals = getgenv().BananaPortals or {}
-do
-	local BP = getgenv().BananaPortals
-	local HttpService = game:GetService("HttpService")
-	BP.Islands = {
-		Castle = Vector3.new(-5092, 315, -3130),
-		Hydra = Vector3.new(5756, 610, -282),
-		Mansion = Vector3.new(-12471, 374, -7551),
-		Tiki = Vector3.new(-16224, 9, 439),
-	}
-	-- Onde procurar os portais de cada ilha: { centro, raio }.
-	-- Castle: o ponto de pouso do jogo fica no prédio de telhado azul onde estão os 3 portais.
-	-- Hydra: o portal fica no topo da montanha central. Mansion: varanda interna.
-	BP.Search = {
-		Castle = { Vector3.new(-4967.68, 314.88, -3157.10), 220 },
-		Hydra = { Vector3.new(5661.53, 1013.41, -334.96), 260 },
-		Mansion = { Vector3.new(-12463.87, 374.91, -7523.77), 200 },
-		Tiki = { Vector3.new(-16224, 9, 439), 700 },
-	}
-	BP.SearchWide = {
-		Castle = { Vector3.new(-5092, 315, -3130), 450 },
-		Hydra = { Vector3.new(5756, 610, -282), 700 },
-		Mansion = { Vector3.new(-12471, 374, -7551), 400 },
-		Tiki = { Vector3.new(-16224, 9, 439), 900 },
-	}
-	-- Coordenada do portal de SAÍDA da própria ilha (só usada se o objeto não for achado).
-	-- Tiki não tem coordenada conhecida, então não existe fallback para ele.
-	BP.OwnPortal = {
-		Hydra = Vector3.new(5661.5302734375, 1013.4113159179688, -334.9619140625),
-		Mansion = Vector3.new(-12463.8740234375, 374.9144592285156, -7523.77392578125),
-	}
-	BP.Learned, BP.Blacklist, BP.Cache = {}, {}, {}
-
-	-- Rotas já confirmadas na prática (entrou no portal e chegou na ilha certa) ficam salvas.
-	local SAVE = "Banana Cat Hub/PortalPads.json"
-	pcall(function()
-		if isfile and readfile and isfile(SAVE) then
-			local data = HttpService:JSONDecode(readfile(SAVE))
-			for key, v in pairs(data.learned or {}) do
-				BP.Learned[key] = Vector3.new(v[1], v[2], v[3])
-			end
-		end
-	end)
-	local function SaveLearned()
-		pcall(function()
-			if writefile then
-				local out = { learned = {} }
-				for key, v in pairs(BP.Learned) do
-					out.learned[key] = { v.X, v.Y, v.Z }
-				end
-				writefile(SAVE, HttpService:JSONEncode(out))
-			end
-		end)
-	end
-	local function PosKey(v)
-		return string.format("%d,%d,%d", math.floor(v.X + 0.5), math.floor(v.Y + 0.5), math.floor(v.Z + 0.5))
-	end
-	function BP.Learn(route, pos)
-		BP.Learned[route] = pos
-		SaveLearned()
-	end
-	BP.Routes = { "Castle>Tiki", "Castle>Mansion", "Castle>Hydra", "Tiki>Castle", "Mansion>Castle", "Hydra>Castle" }
-	-- Salva a posição atual do personagem como o portal da rota. Só aceita se estiver na ilha certa
-	-- (a ilha de ORIGEM da rota) e numa altura plausível, para não gravar um ponto qualquer.
-	function BP.SaveHere(route)
-		local from = route:match("^(%w+)>")
-		local root = game:GetService("Players").LocalPlayer.Character
-		root = root and root:FindFirstChild("HumanoidRootPart")
-		if not root or not from or not BP.Islands[from] then
-			return false, "personagem ou rota inválida"
-		end
-		local limit = from == "Castle" and 450 or 900
-		if (root.Position - BP.Islands[from]).Magnitude > limit then
-			return false, "você não está na ilha de origem desta rota (" .. from .. ")"
-		end
-		BP.Learn(route, root.Position)
-		return true, root.Position
-	end
-	function BP.ClearSaved()
-		BP.Learned = {}
-		SaveLearned()
-	end
-	function BP.Ban(route, pos)
-		BP.Blacklist[route .. "|" .. PosKey(pos)] = true
-	end
-
-	local function lower(x)
-		return string.lower(tostring(x or ""))
-	end
-	local DENY = { "chest", "coin", "crate", "barrel", "loot", "fruit", "npc", "sign", "boat", "ship", "drop", "gem" }
-	local function PortalName(n)
-		n = lower(n)
-		if not (string.find(n, "portal", 1, true) or string.find(n, "teleporter", 1, true)) then
-			return false
-		end
-		for _, w in ipairs(DENY) do
-			if string.find(n, w, 1, true) then
-				return false
-			end
-		end
-		return true
-	end
-	-- Os portais são "colunas transparentes" (wiki). Assinatura estrita: peça sem colisão, parcialmente
-	-- transparente, ALTA e estreita (coluna), sem palavra proibida na cadeia, e com sinal de portal:
-	-- TouchInterest, efeito de partículas/luz ou nome de portal. Baús e objetos comuns não passam
-	-- (são opacos, baixos ou com colisão).
-	local function LooksLikePortalColumn(part)
-		if part.Parent == nil or part:IsA("Terrain") then
-			return false
-		end
-		if part.CanCollide or part.Transparency < 0.3 then
-			return false
-		end
-		local size = part.Size
-		local width = math.max(size.X, size.Z)
-		if size.Y < 7 or width > 40 or size.Y < width * 1.3 then
-			return false
-		end
-		local cur = part
-		for _ = 1, 3 do
-			if not cur or cur == workspace then
-				break
-			end
-			local n = lower(cur.Name)
-			for _, w in ipairs(DENY) do
-				if string.find(n, w, 1, true) then
-					return false
-				end
-			end
-			cur = cur.Parent
-		end
-		if part:FindFirstChild("TouchInterest") then
-			return true
-		end
-		for _, d in ipairs(part:GetChildren()) do
-			if d:IsA("ParticleEmitter") or d:IsA("PointLight") or d:IsA("Beam") or d:IsA("Attachment") then
-				return true
-			end
-		end
-		return false
-	end
-
-	-- Raiz do portal: o ancestral MAIS BAIXO (próprio, pai ou avô) com nome de portal.
-	-- Qualquer palavra proibida (baú, moeda etc.) na cadeia descarta a peça.
-	local function PortalRoot(part)
-		local chain, cur = {}, part
-		for _ = 1, 3 do
-			if not cur or cur == workspace then
-				break
-			end
-			chain[#chain + 1] = cur
-			cur = cur.Parent
-		end
-		local root
-		for _, inst in ipairs(chain) do
-			local n = lower(inst.Name)
-			for _, w in ipairs(DENY) do
-				if string.find(n, w, 1, true) then
-					return nil
-				end
-			end
-			if not root and PortalName(inst.Name) then
-				root = inst
-			end
-		end
-		return root
-	end
-
-	-- Portais (unidades) de uma ilha: por NOME de portal ou por assinatura de coluna transparente,
-	-- agrupados por raiz e por proximidade. Nunca por TouchInterest/proximidade soltos.
-	local function ScanUnits(center, radius)
-		local byRoot, list = {}, {}
-		local function inspect(obj)
-			if not obj:IsA("BasePart") or (obj.Position - center).Magnitude > radius then
-				return
-			end
-			local root = PortalRoot(obj)
-			if not root and LooksLikePortalColumn(obj) then
-				root = obj
-			end
-			if not root then
-				return
-			end
-			local u = byRoot[root]
-			if not u then
-				u = { root = root, parts = {} }
-				byRoot[root] = u
-				list[#list + 1] = u
-			end
-			u.parts[#u.parts + 1] = obj
-		end
-		local ok, nearby = pcall(function()
-			return workspace:GetPartBoundsInRadius(center, radius)
-		end)
-		if ok and type(nearby) == "table" then
-			for _, obj in ipairs(nearby) do
-				inspect(obj)
-			end
-		end
-		if #list == 0 then
-			for _, folder in ipairs({ workspace:FindFirstChild("Map"), workspace:FindFirstChild("_WorldOrigin") }) do
-				if folder then
-					for _, obj in ipairs(folder:GetDescendants()) do
-						inspect(obj)
-					end
-				end
-			end
-		end
-		for _, u in ipairs(list) do
-			local sum = Vector3.new(0, 0, 0)
-			for _, part in ipairs(u.parts) do
-				sum = sum + part.Position
-			end
-			u.pos = sum / #u.parts
-		end
-		-- Junta unidades a menos de 14 studs (um portal feito de várias peças).
-		local merged = {}
-		for _, u in ipairs(list) do
-			local into
-			for _, m in ipairs(merged) do
-				if (m.pos - u.pos).Magnitude < 14 then
-					into = m
-					break
-				end
-			end
-			if into then
-				for _, part in ipairs(u.parts) do
-					into.parts[#into.parts + 1] = part
-				end
-				local sum = Vector3.new(0, 0, 0)
-				for _, part in ipairs(into.parts) do
-					sum = sum + part.Position
-				end
-				into.pos = sum / #into.parts
-			else
-				merged[#merged + 1] = u
-			end
-		end
-		return merged
-	end
-	function BP.Units(island)
-		local ck = "units:" .. island
-		local cached = BP.Cache[ck]
-		if cached and tick() - cached.t < (#cached.list > 0 and 60 or 20) then
-			return cached.list
-		end
-		local cfg = BP.Search[island]
-		if not cfg then
-			return {}
-		end
-		local merged = ScanUnits(cfg[1], cfg[2])
-		-- Castle precisa de exatamente 3 portais; se a área justa não deu 3, tenta a área larga.
-		if (island == "Castle" and #merged ~= 3) or #merged == 0 then
-			local wide = BP.SearchWide[island]
-			if wide then
-				local m2 = ScanUnits(wide[1], wide[2])
-				if island ~= "Castle" or #m2 == 3 or #merged == 0 then
-					merged = m2
-				end
-			end
-		end
-		BP.Cache[ck] = { t = tick(), list = merged }
-		return merged
-	end
-
-	-- Um portal é "laranja" se alguma peça, luz ou partícula dele for laranja.
-	local function IsOrange(c)
-		local h, sat, v = c:ToHSV()
-		local deg = h * 360
-		return deg >= 12 and deg <= 42 and sat >= 0.6 and v >= 0.6
-	end
-	local function UnitOrange(u)
-		local scan = { u.root }
-		pcall(function()
-			for _, d in ipairs(u.root:GetDescendants()) do
-				scan[#scan + 1] = d
-			end
-		end)
-		for _, d in ipairs(scan) do
-			local c
-			if d:IsA("BasePart") then
-				c = d.Color
-			elseif d:IsA("Light") then
-				c = d.Color
-			elseif d:IsA("ParticleEmitter") then
-				pcall(function()
-					c = d.Color.Keypoints[1].Value
-				end)
-			elseif d:IsA("Decal") or d:IsA("Texture") then
-				c = d.Color3
-			end
-			if c and IsOrange(c) then
-				return true
-			end
-		end
-		return false
-	end
-
-	-- Os 3 portais do Castle em ordem esquerda -> meio -> direita:
-	-- esquerda = laranja (Tiki). Se não houver exatamente 3 portais e exatamente 1 laranja
-	-- numa ponta da fileira, NÃO identifica (nunca adivinha).
-	function BP.CastleSlots()
-		local c = BP.Cache.slots
-		if c and tick() - c.t < (c.slots and 60 or 20) then
-			return c.slots
-		end
-		local units = BP.Units("Castle")
-		local result
-		local flat = Vector3.new(1, 0, 1)
-		if #units == 3 then
-			local orange, count = nil, 0
-			for _, u in ipairs(units) do
-				if UnitOrange(u) then
-					orange, count = u, count + 1
-				end
-			end
-			if count == 1 then
-				local far, farD = nil, -1
-				for _, u in ipairs(units) do
-					if u ~= orange then
-						local d = ((u.pos - orange.pos) * flat).Magnitude
-						if d > farD then
-							far, farD = u, d
-						end
-					end
-				end
-				if far and farD > 6 then
-					local axis = ((far.pos - orange.pos) * flat).Unit
-					local others, valid = {}, true
-					for _, u in ipairs(units) do
-						if u ~= orange then
-							local along = ((u.pos - orange.pos) * flat):Dot(axis)
-							if along <= 1 then
-								valid = false
-							end
-							others[#others + 1] = { u = u, along = along }
-						end
-					end
-					if valid and #others == 2 then
-						table.sort(others, function(x, y)
-							return x.along < y.along
-						end)
-						result = { Tiki = orange, Mansion = others[1].u, Hydra = others[2].u }
-					end
-				end
-			end
-		end
-		BP.Cache.slots = { t = tick(), slots = result }
-		return result
-	end
-
-	-- Posição do portal da rota from>to. Retorna (posição, origem, unidade) ou nil.
-	function BP.Pad(from, to)
-		local key = from .. ">" .. to
-		local manual = getgenv().PortalPads and getgenv().PortalPads[key]
-		if typeof(manual) == "Vector3" then
-			return manual, "manual", nil
-		end
-		if BP.Learned[key] then
-			return BP.Learned[key], "confirmado", nil
-		end
-		if to == "Castle" then
-			-- Portal físico da própria ilha: o portal (por nome) mais perto da referência dela.
-			local ref = BP.OwnPortal[from] or BP.Islands[from]
-			local best, bestD
-			for _, u in ipairs(BP.Units(from)) do
-				if not BP.Blacklist[key .. "|" .. PosKey(u.pos)] then
-					local d = (u.pos - ref).Magnitude
-					if not bestD or d < bestD then
-						best, bestD = u, d
-					end
-				end
-			end
-			if best then
-				return best.pos, "mapa", best
-			end
-			if BP.OwnPortal[from] then
-				return BP.OwnPortal[from], "coordenada da própria ilha", nil
-			end
-			return nil, "não identificado"
-		end
-		-- Castle -> ilha: precisa dos 3 portais identificados; sem isso não escolhe nenhum.
-		local slots = BP.CastleSlots()
-		local u = slots and slots[to]
-		if u and not BP.Blacklist[key .. "|" .. PosKey(u.pos)] then
-			return u.pos, "mapa", u
-		end
-		return nil, slots and "bloqueado" or "não identificado"
-	end
-
-	-- Funções que viajam entre essas ilhas.
-	function BP.FarmActive()
-		return (
-			Settings["Auto Farm Level"]
-			or Settings["Auto Farm Bones"]
-			or Settings["Auto Farm Katakuri"]
-			or Settings["Auto Farm Tyrant of the Skies"]
-		) and true or false
-	end
-	function BP.Active()
-		return (
-			Settings["Use Portals"]
-			or BP.FarmActive()
-			or Settings["Farm Mastery"]
-			or Settings["Auto Elite Hunter"]
-			or Settings["Auto Quest Dragon Hunter"]
-			or Settings["Auto Pirate Raid"]
-		) and true or false
-	end
-end
--- ==========================================================================
 function toTarget(P, e)
 	if typeof(P) ~= "CFrame" then
 		return
@@ -5907,153 +5486,6 @@ function toTarget(P, e)
 				TweenManager.CancelCurrent()
 			end
 			return
-		end
-		if getgenv().BananaPortals and getgenv().BananaPortals.Active and getgenv().BananaPortals.Active() then
-			-- Use only the physical Third Sea portals. Never fall through to the
-			-- normal long-distance teleport when a supported portal route is needed.
-			local function UsePhysicalThirdSeaPortal(targetPosition)
-				local character = t.Character
-				local root = character and character:FindFirstChild("HumanoidRootPart")
-				if not root or not targetPosition or game.PlaceId ~= getgenv().CheckPlaceId then
-					return false, false
-				end
-				local BP = getgenv().BananaPortals
-				if not BP or not BP.Pad then
-					return false, false
-				end
-
-				local function nearestIsland(pos)
-					local best, bestDistance
-					for name, center in pairs(BP.Islands) do
-						local distance = (pos - center).Magnitude
-						if not bestDistance or distance < bestDistance then
-							best, bestDistance = name, distance
-						end
-					end
-					return bestDistance and bestDistance <= 2500 and best or nil
-				end
-
-				local currentIsland = nearestIsland(root.Position)
-				local targetIsland = nearestIsland(targetPosition)
-
-				-- Aprende com o resultado real: entrou num portal do Castle esperando a ilha X.
-				-- Chegou em X -> confirma. Chegou em Y -> esse portal é de Y (nunca mais é usado para X).
-				local prev = getgenv().__PortalState
-				if
-					prev
-					and prev.padPos
-					and prev.from == "Castle"
-					and currentIsland
-					and currentIsland ~= "Castle"
-					and tick() - (prev.touchedAt or 0) < 8
-				then
-					if currentIsland == prev.to then
-						BP.Learn(prev.route, prev.padPos)
-					else
-						BP.Learn("Castle>" .. currentIsland, prev.padPos)
-						BP.Ban(prev.route, prev.padPos)
-					end
-					getgenv().__PortalState = nil
-					getgenv().noclip = false
-					return false, false
-				end
-
-				if not currentIsland then
-					getgenv().__PortalState = nil
-					return false, false
-				end
-
-				-- Próximo salto:
-				--   Castle  -> portal do Castle da ilha de destino (só se o destino for outra ilha);
-				--   ilha de fora -> portal da própria ilha (leva ao Castle) sempre que o destino não for a mesma ilha.
-				-- Ex.: Hydra -> Mansion = Hydra -> Castle -> Mansion.
-				local nextIsland
-				if currentIsland == "Castle" then
-					if targetIsland and targetIsland ~= "Castle" then
-						nextIsland = targetIsland
-					end
-				elseif targetIsland ~= currentIsland then
-					nextIsland = "Castle"
-				end
-				if not nextIsland then
-					getgenv().__PortalState = nil
-					return false, false
-				end
-
-				local routeKey = currentIsland .. ">" .. nextIsland
-				local st = getgenv().__PortalState
-				if not st or st.route ~= routeKey then
-					st = { route = routeKey, from = currentIsland, to = nextIsland, since = tick(), lastTry = 0 }
-					getgenv().__PortalState = st
-				end
-				-- Se este salto não andar em 45s, devolve o controle ao teleporte normal por 60s.
-				if (st.giveUpUntil or 0) > tick() then
-					return false, false
-				end
-				if tick() - st.since > 45 then
-					st.giveUpUntil = tick() + 60
-					st.since = tick()
-					st.padPos = nil
-					TweenManager.CancelCurrent()
-					return false, false
-				end
-
-				-- Portal EXATO desta rota. Se não foi identificado, não adivinha e não usa outro:
-				-- deixa o teleporte normal agir e tenta identificar de novo em 20s.
-				local pad, _, unit = BP.Pad(currentIsland, nextIsland)
-				if not pad then
-					st.giveUpUntil = tick() + 20
-					return false, false
-				end
-				getgenv().noclip = true
-
-				-- 1) Vai até o portal desta rota.
-				if (root.Position - pad).Magnitude > 5 then
-					B(root, CFrame.new(pad), 300, 3)
-					return false, true
-				end
-
-				-- 2) Está dentro do portal: toque físico SÓ nas peças do portal identificado.
-				TweenManager.CancelCurrent()
-				st.padPos = pad
-				st.touchedAt = tick()
-				if tick() - st.lastTry >= 1.5 then
-					st.lastTry = tick()
-					local touchFn = firetouchinterest
-					if touchFn then
-						local portal = unit
-						if not portal then
-							for _, u in ipairs(BP.Units(currentIsland)) do
-								if (u.pos - pad).Magnitude <= 15 then
-									portal = u
-									break
-								end
-							end
-						end
-						if portal then
-							for _, part in ipairs(portal.parts) do
-								pcall(function()
-									touchFn(root, part, 0)
-									task.wait(0.05)
-									touchFn(root, part, 1)
-								end)
-							end
-						end
-					end
-				end
-				-- Chegou na ilha do salto (ex.: Castle): limpa o estado para o próximo salto.
-				local afterIsland = nearestIsland(root.Position)
-				if afterIsland == nextIsland and currentIsland ~= "Castle" then
-					getgenv().__PortalState = nil
-					getgenv().noclip = false
-				end
-				return false, true
-			end
-
-			local usedPortal, supportedRoute = UsePhysicalThirdSeaPortal(P.Position)
-			if usedPortal or supportedRoute then
-				return
-			end
 		end
 
 		local l, d, _
@@ -7085,8 +6517,218 @@ function BringMob(Q)
 	end
 end
 task.wait(1)
+
+-- Physical Portal system for Setting Farm.
+-- Uses the real portal parts/models in Workspace.Map; it does not use Portal Fruit.
+-- Castle has three physical portals: left = Tiki, middle = Mansion, right = Hydra.
+local PhysicalPortalState = {
+    Busy = false,
+    LastRoute = nil,
+    LastRouteAt = 0,
+}
+
+local function GetPortalHubModel(kind)
+    local map = workspace:FindFirstChild("Map")
+    if not map then return nil end
+    local names = {
+        Castle = {"Castle on the Sea", "CastleOnTheSea"},
+        Mansion = {"Floating Turtle", "FloatingTurtle", "Mansion"},
+        Hydra = {"Hydra Island", "HydraIsland"},
+        Tiki = {"Tiki Outpost", "TikiOutpost"},
+    }
+    for _, name in ipairs(names[kind] or {}) do
+        local obj = map:FindFirstChild(name, true)
+        if obj and (obj:IsA("Model") or obj:IsA("BasePart")) then
+            return obj
+        end
+    end
+    return nil
+end
+
+local function GetObjectCenter(obj)
+    if not obj then return nil end
+    if obj:IsA("BasePart") then return obj.Position end
+    if obj:IsA("Model") then
+        local ok, cf = pcall(function() return obj:GetBoundingBox() end)
+        if ok and cf then return cf.Position end
+        return obj:GetPivot().Position
+    end
+end
+
+local function GetPhysicalPortalParts()
+    local map = workspace:FindFirstChild("Map")
+    if not map then return {} end
+    local list = {}
+    local seen = {}
+    for _, obj in ipairs(map:GetDescendants()) do
+        local n = string.lower(obj.Name)
+        if obj:IsA("BasePart") and (string.find(n, "portal", 1, true) or string.find(n, "indraportal", 1, true) or string.find(n, "tyrantportal", 1, true)) then
+            if not seen[obj] then
+                seen[obj] = true
+                table.insert(list, obj)
+            end
+        end
+    end
+    return list
+end
+
+local function ClassifyPhysicalPortal(part)
+    if not part then return nil end
+    local pos = part.Position
+    local bestKind, bestDist
+    for _, kind in ipairs({"Castle", "Mansion", "Hydra", "Tiki"}) do
+        local center = GetObjectCenter(GetPortalHubModel(kind))
+        if center then
+            local dist = (pos - center).Magnitude
+            if not bestDist or dist < bestDist then
+                bestDist, bestKind = dist, kind
+            end
+        end
+    end
+    if not bestKind or bestDist > 1800 then return nil end
+
+    -- Castle has three physical portals. Determine their destination from
+    -- their left/middle/right position relative to the Castle model itself.
+    if bestKind == "Castle" then
+        local castle = GetPortalHubModel("Castle")
+        local cf
+        if castle and castle:IsA("Model") then
+            cf = castle:GetPivot()
+        elseif castle and castle:IsA("BasePart") then
+            cf = castle.CFrame
+        end
+        if cf then
+            local localPos = cf:PointToObjectSpace(pos)
+            local width = 1
+            pcall(function()
+                width = castle:GetExtentsSize().X
+            end)
+            if localPos.X < -math.max(8, width * 0.08) then
+                return "Tiki"
+            elseif localPos.X > math.max(8, width * 0.08) then
+                return "Hydra"
+            else
+                return "Mansion"
+            end
+        end
+    end
+    return bestKind
+end
+
+local function FindPhysicalPortal(destination)
+    local wanted = string.lower(destination or "")
+    local parts = GetPhysicalPortalParts()
+    local best, bestDist
+    local root = t.Character and t.Character:FindFirstChild("HumanoidRootPart")
+    for _, part in ipairs(parts) do
+        local kind = ClassifyPhysicalPortal(part)
+        local matches = (wanted == string.lower(kind or ""))
+        if matches then
+            local dist = root and (part.Position - root.Position).Magnitude or 0
+            if not bestDist or dist < bestDist then
+                best, bestDist = part, dist
+            end
+        end
+    end
+    return best
+end
+
+local function GetHubFromPosition(pos)
+    local bestKind, bestDist
+    for _, kind in ipairs({"Castle", "Mansion", "Hydra", "Tiki"}) do
+        local center = GetObjectCenter(GetPortalHubModel(kind))
+        if center then
+            local dist = (pos - center).Magnitude
+            if not bestDist or dist < bestDist then
+                bestKind, bestDist = kind, dist
+            end
+        end
+    end
+    if bestDist and bestDist <= 1800 then return bestKind end
+    return nil
+end
+
+local function EnterPhysicalPortal(part)
+    if not part or not part.Parent then return false end
+    local root = t.Character and t.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+    local raw = rawget(_G, "__BananaRawToTarget")
+    if type(raw) == "function" then
+        raw(part.CFrame + Vector3.new(0, 2, 0))
+    else
+        root.CFrame = part.CFrame + Vector3.new(0, 2, 0)
+    end
+    task.wait(0.35)
+    pcall(function()
+        if typeof(firetouchinterest) == "function" then
+            firetouchinterest(root, part, 0)
+            firetouchinterest(root, part, 1)
+        end
+    end)
+    task.wait(1.0)
+    return true
+end
+
+local function UsePhysicalPortalRoute(target)
+    if not Settings["Use Portals"] then return false end
+    if PhysicalPortalState.Busy then return true end
+    if typeof(target) ~= "CFrame" then return false end
+
+    local destination = GetHubFromPosition(target.Position)
+    if not destination then return false end
+
+    local current = GetHubFromPosition(t.Character.HumanoidRootPart.Position)
+    if current == destination then return false end
+
+    -- If already at Castle, take the exact physical portal for the destination.
+    -- Otherwise, use the physical portal of the current hub to reach Castle first.
+    local firstDestination = current == "Castle" and destination or "Castle"
+    local firstPortal = FindPhysicalPortal(firstDestination)
+    if not firstPortal then return false end
+
+    PhysicalPortalState.Busy = true
+    PhysicalPortalState.LastRoute = current .. "->" .. destination
+    PhysicalPortalState.LastRouteAt = tick()
+    local ok = pcall(function()
+        EnterPhysicalPortal(firstPortal)
+        if firstDestination == "Castle" and destination ~= "Castle" then
+            task.wait(0.5)
+            local secondPortal = FindPhysicalPortal(destination)
+            if secondPortal then
+                EnterPhysicalPortal(secondPortal)
+            end
+        end
+    end)
+    PhysicalPortalState.Busy = false
+    return ok
+end
+
+-- Keep the original movement function untouched and route only the relevant
+-- Setting Farm movements through the physical portal system when enabled.
+if rawget(_G, "__BananaRawToTarget") == nil then
+    rawset(_G, "__BananaRawToTarget", toTarget)
+end
+local __BananaOriginalToTarget = toTarget
+toTarget = function(P, e)
+    if Settings["Use Portals"] and not PhysicalPortalState.Busy then
+        local routed = false
+        pcall(function() routed = UsePhysicalPortalRoute(P) end)
+        if routed then return end
+    end
+    return __BananaOriginalToTarget(P, e)
+end
+
 SettingFarmMain = Main.CreatePage({ Page_Name = "Setting Farm", Page_Title = "Setting Farm" })
 SettingFarmMainSection = SettingFarmMain.CreateSection("Setting Farm")
+SettingFarmMainSection.CreateToggle(
+	{ Title = "Use Portals", Desc = "Use physical Tiki, Mansion, Hydra and Castle portals when available", Default = Settings["Use Portals"] or false },
+	function(value)
+		SaveSettings("Use Portals", value)
+		if not value then
+			PhysicalPortalState.Busy = false
+		end
+	end
+)
 local Q, d =
 	false,
 	SettingFarmMainSection.CreateDropdown(
@@ -7341,71 +6983,6 @@ SettingFarmMainSection.CreateSlider(
 		SaveSettings("Time Hop Server", I)
 	end
 )
-SettingFarmMainSection.CreateToggle(
-	{ Title = "Use Portals", Desc = "Sistema inteligente que utiliza os portais físicos das ilhas para realizar os deslocamentos de forma rápida e eficiente. Quando o destino possui um portal próprio, ele usa diretamente; caso não tenha, utiliza a rota disponível pelo Castelo até chegar ao destino, sem depender de coordenadas aleatórias.", Default = Settings["Use Portals"] or false },
-	function(I)
-		SaveSettings("Use Portals", I)
-	end
-)
-SettingFarmMainSection.CreateDropdown(
-	{
-		Title = "Portal Route (to save)",
-		List = { "Castle>Tiki", "Castle>Mansion", "Castle>Hydra", "Tiki>Castle", "Mansion>Castle", "Hydra>Castle" },
-		Search = false,
-		Selected = false,
-		Default = getgenv().__PortalRouteSel or nil,
-	},
-	function(route)
-		getgenv().__PortalRouteSel = route
-	end
-)
-SettingFarmMainSection.CreateButton({ Title = "Save Portal Here (stand inside the portal)" }, function()
-	local BP = getgenv().BananaPortals
-	local route = getgenv().__PortalRouteSel
-	local function notify(msg)
-		pcall(function()
-			require(game:GetService("ReplicatedStorage").Notification).new("<Color=Yellow>" .. msg .. "<Color=/>"):Display()
-		end)
-		print("[Banana Cat Hub] " .. msg)
-	end
-	if not route then
-		return notify("Escolha primeiro a rota em Portal Route")
-	end
-	local ok, info = BP.SaveHere(route)
-	if ok then
-		notify("Portal salvo: " .. route .. " = " .. tostring(info))
-	else
-		notify("Não salvou: " .. tostring(info))
-	end
-end)
-SettingFarmMainSection.CreateButton({ Title = "Clear Saved Portals" }, function()
-	getgenv().BananaPortals.ClearSaved()
-	print("[Banana Cat Hub] Portais salvos apagados")
-end)
-SettingFarmMainSection.CreateButton({ Title = "Debug Portals (ver no F9)" }, function()
-	local BP = getgenv().BananaPortals
-	print("[Banana Cat Hub] ===== Debug Portals =====")
-	for _, route in ipairs({ "Castle>Tiki", "Castle>Mansion", "Castle>Hydra", "Tiki>Castle", "Mansion>Castle", "Hydra>Castle" }) do
-		local from, to = route:match("^(%w+)>(%w+)$")
-		local pos, how = BP.Pad(from, to)
-		print(string.format("  %-15s -> %s (%s)", route, tostring(pos), how))
-	end
-	for _, island in ipairs({ "Castle", "Tiki", "Mansion", "Hydra" }) do
-		local units = BP.Units(island)
-		print("  [" .. island .. "] portais por nome:", #units)
-		for _, u in ipairs(units) do
-			print(string.format("     %s  pos=%s peças=%d", u.root:GetFullName(), tostring(u.pos), #u.parts))
-		end
-	end
-	for _, route in ipairs(BP.Routes) do
-		if BP.Learned[route] then
-			print("  salvo/confirmado:", route, tostring(BP.Learned[route]))
-		end
-	end
-	local slots = BP.CastleSlots()
-	print("  Castle esquerda/meio/direita:", slots and "identificado (Tiki/Mansion/Hydra)" or "NÃO identificado (precisa de exatamente 3 portais e 1 laranja na ponta)")
-	print("[Banana Cat Hub] ===== fim =====")
-end)
 SettingFarmMainSection.CreateSlider(
 	{ Title = "Bring Mob Count", Min = 2, Max = 6, Default = Settings["Bring Mob Count"] or 2, Precise = true },
 	function(I)
