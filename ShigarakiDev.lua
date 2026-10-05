@@ -6933,7 +6933,7 @@ MasteryFarmSection = FarmMain.CreateSection("Mastery Farm")
 MasteryFarmSection.CreateDropdown(
 	{
 		Title = "Select Method Farm Mastery",
-		List = { "Blox Fruit", "Gun", "Sword" },
+		List = { "Blox Fruit", "Gun" },
 		Search = true,
 		Selected = false,
 		Default = Settings["Select Method Farm Mastery"] or nil,
@@ -8270,7 +8270,16 @@ function GetPathFruit()
 	return best
 end
 function GetPirateRaid(f)
-	for V, V in ipairs((if f then game.ReplicatedStorage else game.workspace.Enemies):GetChildren()) do
+	-- Mantém a detecção original, mas permite encontrar o Pirate Raid mesmo
+	-- quando o inimigo estiver muito longe do ponto central do Castelo.
+	-- GetDescendants também cobre modelos que estejam dentro de pastas/containers.
+	local container = if f then game.ReplicatedStorage else game.workspace.Enemies
+	if not container then
+		return nil
+	end
+	local castlePosition = Vector3.new(-5543, 313, -2964)
+	local maxDistance = 5000
+	for _, V in ipairs(container:GetDescendants()) do
 		if
 			V:IsA("Model")
 			and V.Name ~= "Oni2"
@@ -8279,9 +8288,11 @@ function GetPirateRaid(f)
 			and not string.find(V.Name, "Wraith")
 			and V.Name ~= "rip_indra True Form"
 			and (IsMobAlive(V))
-			and (V.HumanoidRootPart.Position - Vector3.new(-5543, 313, -2964)).magnitude < 1000
 		then
-			return V
+			local root = V:FindFirstChild("HumanoidRootPart")
+			if root and (root.Position - castlePosition).Magnitude < maxDistance then
+				return V
+			end
 		end
 	end
 end
