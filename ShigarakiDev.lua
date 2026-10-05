@@ -20413,8 +20413,10 @@ function AutoMultiFindPrehistoric()
 		return
 	end
 	if not IsSelectedPlayersSeatedInMyBoat() then
-		if not getgenv().MultiPrehistoricWaitingNoti then
+		local now = tick()
+		if not getgenv().MultiPrehistoricWaitingNoti or not getgenv().MultiPrehistoricWaitingNotiTime or now - getgenv().MultiPrehistoricWaitingNotiTime >= 5 then
 			getgenv().MultiPrehistoricWaitingNoti = true
+			getgenv().MultiPrehistoricWaitingNotiTime = now
 			A.CreateNoti({ Title = "Banana Cat Hub", Desc = "Waiting for selected players to sit in the boat", ShowTime = 5 })
 		end
 		if not t.Character.Humanoid.Sit then
@@ -20422,7 +20424,6 @@ function AutoMultiFindPrehistoric()
 		end
 		return
 	end
-	getgenv().MultiPrehistoricWaitingNoti = false
 	if not t.Character.Humanoid.Sit then
 		toTarget(vehicleSeat.CFrame)
 		return
@@ -21184,9 +21185,9 @@ function FullyEventVolcano()
 		end
 	end
 end
-FarmingMultiVulcnaoSection = VolcanoTab.CreateSection("Farming Multi Vulcnao")
+FarmingMultiVulcanoSection = VolcanoTab.CreateSection("Farming Multi Vulcano")
 
-local MultiPrehistoricPlayerDropdown = FarmingMultiVulcnaoSection.CreateDropdown(
+local MultiPrehistoricPlayerDropdown = FarmingMultiVulcanoSection.CreateDropdown(
 	{
 		Title = "Select Player Multi Prehistoric Island",
 		List = PrepareMultiSelectList(DetectNamePlayerMulti(), Settings["Select Player Multi Prehistoric Island"]),
@@ -21198,16 +21199,17 @@ local MultiPrehistoricPlayerDropdown = FarmingMultiVulcnaoSection.CreateDropdown
 		SaveSettings("Select Player Multi Prehistoric Island", value, state)
 	end
 )
-FarmingMultiVulcnaoSection.CreateButton({ Title = "Refresh Player" }, function()
+FarmingMultiVulcanoSection.CreateButton({ Title = "Refresh Player" }, function()
 	MultiPrehistoricPlayerDropdown:GetNewList(DetectNamePlayerMulti())
 end)
 
-FarmingMultiVulcnaoSection.CreateToggle(
+FarmingMultiVulcanoSection.CreateToggle(
 	{ Title = "Auto Multi Find Prehistoric Island", Desc = nil, Default = Settings["Auto Multi Find Prehistoric Island"] or false },
 	function(value)
 		if value then
 			getgenv().MultiPrehistoricTwoMeterDone = false
 			getgenv().MultiPrehistoricWaitingNoti = false
+			getgenv().MultiPrehistoricWaitingNotiTime = nil
 			spawn(function()
 				while Settings["Auto Multi Find Prehistoric Island"] and wait(0.1) do
 					pcall(function()
@@ -21219,12 +21221,13 @@ FarmingMultiVulcnaoSection.CreateToggle(
 		if not value then
 			getgenv().MultiPrehistoricTwoMeterDone = false
 			getgenv().MultiPrehistoricWaitingNoti = false
+			getgenv().MultiPrehistoricWaitingNotiTime = nil
 		end
 		SaveSettings("Auto Multi Find Prehistoric Island", value)
 	end
 )
 
-FarmingMultiVulcnaoSection.CreateToggle(
+FarmingMultiVulcanoSection.CreateToggle(
 	{ Title = "Auto Multi Event Prehistoric Island", Desc = "Same event logic as Auto Event Prehistoric Island", Default = Settings["Auto Multi Event Prehistoric Island"] or false },
 	function(value)
 		if value then
