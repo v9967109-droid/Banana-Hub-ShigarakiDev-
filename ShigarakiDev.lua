@@ -6517,218 +6517,8 @@ function BringMob(Q)
 	end
 end
 task.wait(1)
-
--- Physical Portal system for Setting Farm.
--- Uses the real portal parts/models in Workspace.Map; it does not use Portal Fruit.
--- Castle has three physical portals: left = Tiki, middle = Mansion, right = Hydra.
-local PhysicalPortalState = {
-    Busy = false,
-    LastRoute = nil,
-    LastRouteAt = 0,
-}
-
-local function GetPortalHubModel(kind)
-    local map = workspace:FindFirstChild("Map")
-    if not map then return nil end
-    local names = {
-        Castle = {"Castle on the Sea", "CastleOnTheSea"},
-        Mansion = {"Floating Turtle", "FloatingTurtle", "Mansion"},
-        Hydra = {"Hydra Island", "HydraIsland"},
-        Tiki = {"Tiki Outpost", "TikiOutpost"},
-    }
-    for _, name in ipairs(names[kind] or {}) do
-        local obj = map:FindFirstChild(name, true)
-        if obj and (obj:IsA("Model") or obj:IsA("BasePart")) then
-            return obj
-        end
-    end
-    return nil
-end
-
-local function GetObjectCenter(obj)
-    if not obj then return nil end
-    if obj:IsA("BasePart") then return obj.Position end
-    if obj:IsA("Model") then
-        local ok, cf = pcall(function() return obj:GetBoundingBox() end)
-        if ok and cf then return cf.Position end
-        return obj:GetPivot().Position
-    end
-end
-
-local function GetPhysicalPortalParts()
-    local map = workspace:FindFirstChild("Map")
-    if not map then return {} end
-    local list = {}
-    local seen = {}
-    for _, obj in ipairs(map:GetDescendants()) do
-        local n = string.lower(obj.Name)
-        if obj:IsA("BasePart") and (string.find(n, "portal", 1, true) or string.find(n, "indraportal", 1, true) or string.find(n, "tyrantportal", 1, true)) then
-            if not seen[obj] then
-                seen[obj] = true
-                table.insert(list, obj)
-            end
-        end
-    end
-    return list
-end
-
-local function ClassifyPhysicalPortal(part)
-    if not part then return nil end
-    local pos = part.Position
-    local bestKind, bestDist
-    for _, kind in ipairs({"Castle", "Mansion", "Hydra", "Tiki"}) do
-        local center = GetObjectCenter(GetPortalHubModel(kind))
-        if center then
-            local dist = (pos - center).Magnitude
-            if not bestDist or dist < bestDist then
-                bestDist, bestKind = dist, kind
-            end
-        end
-    end
-    if not bestKind or bestDist > 1800 then return nil end
-
-    -- Castle has three physical portals. Determine their destination from
-    -- their left/middle/right position relative to the Castle model itself.
-    if bestKind == "Castle" then
-        local castle = GetPortalHubModel("Castle")
-        local cf
-        if castle and castle:IsA("Model") then
-            cf = castle:GetPivot()
-        elseif castle and castle:IsA("BasePart") then
-            cf = castle.CFrame
-        end
-        if cf then
-            local localPos = cf:PointToObjectSpace(pos)
-            local width = 1
-            pcall(function()
-                width = castle:GetExtentsSize().X
-            end)
-            if localPos.X < -math.max(8, width * 0.08) then
-                return "Tiki"
-            elseif localPos.X > math.max(8, width * 0.08) then
-                return "Hydra"
-            else
-                return "Mansion"
-            end
-        end
-    end
-    return bestKind
-end
-
-local function FindPhysicalPortal(destination)
-    local wanted = string.lower(destination or "")
-    local parts = GetPhysicalPortalParts()
-    local best, bestDist
-    local root = t.Character and t.Character:FindFirstChild("HumanoidRootPart")
-    for _, part in ipairs(parts) do
-        local kind = ClassifyPhysicalPortal(part)
-        local matches = (wanted == string.lower(kind or ""))
-        if matches then
-            local dist = root and (part.Position - root.Position).Magnitude or 0
-            if not bestDist or dist < bestDist then
-                best, bestDist = part, dist
-            end
-        end
-    end
-    return best
-end
-
-local function GetHubFromPosition(pos)
-    local bestKind, bestDist
-    for _, kind in ipairs({"Castle", "Mansion", "Hydra", "Tiki"}) do
-        local center = GetObjectCenter(GetPortalHubModel(kind))
-        if center then
-            local dist = (pos - center).Magnitude
-            if not bestDist or dist < bestDist then
-                bestKind, bestDist = kind, dist
-            end
-        end
-    end
-    if bestDist and bestDist <= 1800 then return bestKind end
-    return nil
-end
-
-local function EnterPhysicalPortal(part)
-    if not part or not part.Parent then return false end
-    local root = t.Character and t.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return false end
-    local raw = rawget(_G, "__BananaRawToTarget")
-    if type(raw) == "function" then
-        raw(part.CFrame + Vector3.new(0, 2, 0))
-    else
-        root.CFrame = part.CFrame + Vector3.new(0, 2, 0)
-    end
-    task.wait(0.35)
-    pcall(function()
-        if typeof(firetouchinterest) == "function" then
-            firetouchinterest(root, part, 0)
-            firetouchinterest(root, part, 1)
-        end
-    end)
-    task.wait(1.0)
-    return true
-end
-
-local function UsePhysicalPortalRoute(target)
-    if not Settings["Use Portals"] then return false end
-    if PhysicalPortalState.Busy then return true end
-    if typeof(target) ~= "CFrame" then return false end
-
-    local destination = GetHubFromPosition(target.Position)
-    if not destination then return false end
-
-    local current = GetHubFromPosition(t.Character.HumanoidRootPart.Position)
-    if current == destination then return false end
-
-    -- If already at Castle, take the exact physical portal for the destination.
-    -- Otherwise, use the physical portal of the current hub to reach Castle first.
-    local firstDestination = current == "Castle" and destination or "Castle"
-    local firstPortal = FindPhysicalPortal(firstDestination)
-    if not firstPortal then return false end
-
-    PhysicalPortalState.Busy = true
-    PhysicalPortalState.LastRoute = current .. "->" .. destination
-    PhysicalPortalState.LastRouteAt = tick()
-    local ok = pcall(function()
-        EnterPhysicalPortal(firstPortal)
-        if firstDestination == "Castle" and destination ~= "Castle" then
-            task.wait(0.5)
-            local secondPortal = FindPhysicalPortal(destination)
-            if secondPortal then
-                EnterPhysicalPortal(secondPortal)
-            end
-        end
-    end)
-    PhysicalPortalState.Busy = false
-    return ok
-end
-
--- Keep the original movement function untouched and route only the relevant
--- Setting Farm movements through the physical portal system when enabled.
-if rawget(_G, "__BananaRawToTarget") == nil then
-    rawset(_G, "__BananaRawToTarget", toTarget)
-end
-local __BananaOriginalToTarget = toTarget
-toTarget = function(P, e)
-    if Settings["Use Portals"] and not PhysicalPortalState.Busy then
-        local routed = false
-        pcall(function() routed = UsePhysicalPortalRoute(P) end)
-        if routed then return end
-    end
-    return __BananaOriginalToTarget(P, e)
-end
-
 SettingFarmMain = Main.CreatePage({ Page_Name = "Setting Farm", Page_Title = "Setting Farm" })
 SettingFarmMainSection = SettingFarmMain.CreateSection("Setting Farm")
-SettingFarmMainSection.CreateToggle(
-	{ Title = "Use Portals", Desc = "Use physical Tiki, Mansion, Hydra and Castle portals when available", Default = Settings["Use Portals"] or false },
-	function(value)
-		SaveSettings("Use Portals", value)
-		if not value then
-			PhysicalPortalState.Busy = false
-		end
-	end
-)
 local Q, d =
 	false,
 	SettingFarmMainSection.CreateDropdown(
@@ -6743,6 +6533,65 @@ local Q, d =
 			SaveSettings("Select Weapon", I)
 		end
 	)
+-- Physical Use Portals (isolated): never blocks the main script if a portal cannot be found.
+local PhysicalUsePortals = false
+local function FindPhysicalPortal(destination)
+	local wanted = string.lower(tostring(destination or ""))
+	local best, bestScore = nil, -math.huge
+	local function score(obj)
+		local name = string.lower(obj.Name or "")
+		local score = 0
+		if name:find("portal", 1, true) then score += 8 end
+		if wanted ~= "" and name:find(wanted, 1, true) then score += 30 end
+		local attrs = {"Destination", "Target", "Island", "PortalDestination"}
+		for _, a in ipairs(attrs) do
+			local v = obj:GetAttribute(a)
+			if type(v) == "string" and string.lower(v):find(wanted, 1, true) then score += 40 end
+		end
+		if obj:IsA("BasePart") then score += 2 end
+		return score
+	end
+	pcall(function()
+		for _, obj in ipairs(workspace:GetDescendants()) do
+			if obj:IsA("BasePart") or obj:IsA("Model") then
+				local sc = score(obj)
+				if sc > bestScore and sc >= 8 then best, bestScore = obj, sc end
+			end
+		end
+	end)
+	if best and best:IsA("Model") then
+		local part = best.PrimaryPart or best:FindFirstChildWhichIsA("BasePart", true)
+		return part
+	end
+	return best
+end
+local function UsePhysicalPortalTo(destination)
+	if not PhysicalUsePortals then return false end
+	local portal = FindPhysicalPortal(destination)
+	if not portal or not portal:IsA("BasePart") then return false end
+	local char = t.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return false end
+	local ok = pcall(function()
+		toTarget(portal.CFrame * CFrame.new(0, 0, 4))
+		task.wait(0.4)
+		for _, prompt in ipairs(portal:GetDescendants()) do
+			if prompt:IsA("ProximityPrompt") then
+				pcall(function() fireproximityprompt(prompt) end)
+				return
+			end
+		end
+	end)
+	return ok
+end
+SettingFarmMainSection.CreateToggle(
+	{ Title = "Use Portals", Desc = "Use physical island portals when available", Default = Settings["Use Portals"] or false },
+	function(I)
+		PhysicalUsePortals = I
+		SaveSettings("Use Portals", I)
+	end
+)
+
 SettingFarmMainSection.CreateToggle(
 	{ Title = "Attack No Animation ", Desc = nil, Default = Settings["Attack No Animation "] or true },
 	function(I)
