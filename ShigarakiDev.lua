@@ -5464,17 +5464,36 @@ do
 		local tokens = { string.lower(tostring(to)), string.lower(tostring(to == "Castle" and "Sea Castle" or "")) }
 		if to == "Mansion" then
 			tokens[#tokens + 1] = "turtle mansion"
+			tokens[#tokens + 1] = "floating turtle"
+			tokens[#tokens + 1] = "mansion"
+			tokens[#tokens + 1] = "indra"
 		end
 		if to == "Hydra" then
 			tokens[#tokens + 1] = "hydra island"
 			tokens[#tokens + 1] = "hydra town"
+			tokens[#tokens + 1] = "hydra"
+			tokens[#tokens + 1] = "indra"
 		end
 		if to == "Tiki" then
 			tokens[#tokens + 1] = "tiki outpost"
+			tokens[#tokens + 1] = "tiki"
+			tokens[#tokens + 1] = "tyrant"
 		end
 		local best, bestScore
 		for _, c in ipairs(cands) do
 			local score = -c.dist * 0.5
+			-- Os portais do Terceiro Mar são colunas físicas transparentes.
+			-- Algumas versões não colocam "Portal" no nome da peça nem expõem
+			-- TouchInterest diretamente; reconhecer a geometria ajuda nesses casos.
+			local size = c.part.Size
+			local visualPortal = size.Y >= 7
+				and size.Y >= math.max(size.X, size.Z) * 1.5
+				and size.X <= 30
+				and size.Z <= 30
+				and c.part.Transparency >= 0.15
+			if visualPortal then
+				score += 900
+			end
 			for _, token in ipairs(tokens) do
 				if token ~= "" and string.find(c.tags, token, 1, true) then
 					score += 5000
@@ -5482,6 +5501,17 @@ do
 			end
 			if c.named then
 				score += 1500
+			end
+			-- Prioriza um portal que contenha o destino no nome/rótulo.
+			local destinationTag = false
+			for _, token in ipairs(tokens) do
+				if token ~= "" and string.find(c.tags, token, 1, true) then
+					destinationTag = true
+					break
+				end
+			end
+			if destinationTag then
+				score += 2500
 			end
 			if c.touch then
 				score += 700
@@ -20636,16 +20666,34 @@ function AutoMultiFindPrehistoric()
 	end
 	local boat = checkboat()
 	if not boat then
+		getgenv().MultiPrehistoricTwoMeterDone = false
 		game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("BuyBoat", "Beast Hunter")
 		wait(3)
 		return
 	end
+	local vehicleSeat = boat:FindFirstChild("VehicleSeat", true)
+	if not vehicleSeat or not vehicleSeat:IsA("VehicleSeat") then
+		return
+	end
 	if not IsSelectedPlayersSeatedInMyBoat() then
-		local vehicleSeat = boat:FindFirstChild("VehicleSeat", true)
-		if vehicleSeat and vehicleSeat:IsA("VehicleSeat") and not t.Character.Humanoid.Sit then
+		if not getgenv().MultiPrehistoricWaitingNoti then
+			getgenv().MultiPrehistoricWaitingNoti = true
+			A.CreateNoti({ Title = "Banana Cat Hub", Desc = "Waiting for selected players to sit in the boat", ShowTime = 5 })
+		end
+		if not t.Character.Humanoid.Sit then
 			toTarget(vehicleSeat.CFrame)
 		end
 		return
+	end
+	getgenv().MultiPrehistoricWaitingNoti = false
+	if not t.Character.Humanoid.Sit then
+		toTarget(vehicleSeat.CFrame)
+		return
+	end
+	if not getgenv().MultiPrehistoricTwoMeterDone then
+		getgenv().MultiPrehistoricTwoMeterDone = true
+		vehicleSeat.CFrame = vehicleSeat.CFrame * CFrame.new(0, 0, -2)
+		wait(0.25)
 	end
 	AutoFindPrehistoric()
 end
@@ -21421,6 +21469,8 @@ FarmingMultiVulcnaoSection.CreateToggle(
 	{ Title = "Auto Multi Find Prehistoric Island", Desc = nil, Default = Settings["Auto Multi Find Prehistoric Island"] or false },
 	function(value)
 		if value then
+			getgenv().MultiPrehistoricTwoMeterDone = false
+			getgenv().MultiPrehistoricWaitingNoti = false
 			spawn(function()
 				while Settings["Auto Multi Find Prehistoric Island"] and wait(0.1) do
 					pcall(function()
@@ -21428,6 +21478,10 @@ FarmingMultiVulcnaoSection.CreateToggle(
 					end)
 				end
 			end)
+		end
+		if not value then
+			getgenv().MultiPrehistoricTwoMeterDone = false
+			getgenv().MultiPrehistoricWaitingNoti = false
 		end
 		SaveSettings("Auto Multi Find Prehistoric Island", value)
 	end
