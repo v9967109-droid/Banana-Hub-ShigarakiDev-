@@ -20626,62 +20626,26 @@ function IsSelectedPlayersSeatedInMyBoat()
 	return true
 end
 
-getgenv().MultiPrehistoricBoatAdvanced = false
-getgenv().MultiPrehistoricLastWaitNotification = 0
-
 function AutoMultiFindPrehistoric()
 	if not Settings["Auto Multi Find Prehistoric Island"] then
-		getgenv().MultiPrehistoricBoatAdvanced = false
 		return
 	end
 	local selected = GetSelectedMultiPrehistoricPlayers()
 	if #selected == 0 then
-		getgenv().MultiPrehistoricBoatAdvanced = false
 		return
 	end
 	local boat = checkboat()
 	if not boat then
-		getgenv().MultiPrehistoricBoatAdvanced = false
 		game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("BuyBoat", "Beast Hunter")
 		wait(3)
 		return
 	end
 	if not IsSelectedPlayersSeatedInMyBoat() then
-		getgenv().MultiPrehistoricBoatAdvanced = false
-		if tick() - (getgenv().MultiPrehistoricLastWaitNotification or 0) >= 3 then
-			getgenv().MultiPrehistoricLastWaitNotification = tick()
-			A.CreateNoti({
-				Title = "Banana Cat Hub",
-				Desc = "Waiting for selected players to sit in the boat",
-				ShowTime = 3
-			})
-		end
-		local cannonSeat
-		for _, obj in ipairs(boat:GetDescendants()) do
-			if obj.Name == "Seat" and obj.Parent and obj.Parent.Name == "Cannon" and not obj:FindFirstChild("SeatWeld") then
-				cannonSeat = obj
-				break
-			end
-		end
-		if cannonSeat and not t.Character.Humanoid.Sit then
-			toTarget(cannonSeat.CFrame)
+		local vehicleSeat = boat:FindFirstChild("VehicleSeat", true)
+		if vehicleSeat and vehicleSeat:IsA("VehicleSeat") and not t.Character.Humanoid.Sit then
+			toTarget(vehicleSeat.CFrame)
 		end
 		return
-	end
-	if not getgenv().MultiPrehistoricBoatAdvanced then
-		local vehicleSeat = boat:FindFirstChild("VehicleSeat")
-		if vehicleSeat and vehicleSeat:IsA("BasePart") then
-			getgenv().MultiPrehistoricBoatAdvanced = true
-			manageTween(
-				vehicleSeat,
-				vehicleSeat.CFrame * CFrame.new(0, 0, -2),
-				20,
-				"MultiPrehistoricAdvance"
-			)
-			wait(0.25)
-		else
-			getgenv().MultiPrehistoricBoatAdvanced = true
-		end
 	end
 	AutoFindPrehistoric()
 end
@@ -21457,7 +21421,6 @@ FarmingMultiVulcnaoSection.CreateToggle(
 	{ Title = "Auto Multi Find Prehistoric Island", Desc = nil, Default = Settings["Auto Multi Find Prehistoric Island"] or false },
 	function(value)
 		if value then
-			getgenv().MultiPrehistoricBoatAdvanced = false
 			spawn(function()
 				while Settings["Auto Multi Find Prehistoric Island"] and wait(0.1) do
 					pcall(function()
@@ -21465,8 +21428,6 @@ FarmingMultiVulcnaoSection.CreateToggle(
 					end)
 				end
 			end)
-		else
-			getgenv().MultiPrehistoricBoatAdvanced = false
 		end
 		SaveSettings("Auto Multi Find Prehistoric Island", value)
 	end
