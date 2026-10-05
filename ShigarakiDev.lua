@@ -6930,7 +6930,7 @@ MasteryFarmSection = FarmMain.CreateSection("Mastery Farm")
 MasteryFarmSection.CreateDropdown(
 	{
 		Title = "Select Method Farm Mastery",
-		List = { "Blox Fruit", "Gun" },
+		List = { "Blox Fruit", "Gun", "Sword" },
 		Search = true,
 		Selected = false,
 		Default = Settings["Select Method Farm Mastery"] or nil,
@@ -12486,22 +12486,22 @@ SettingSeaEventSection.CreateToggle(
 )
 SettingSeaEventSection.CreateToggle(
 	{
-		Title = "Auto Use DragonStorm For ALL Sea Event",
-		Desc = "Uses only Dragonstorm for every Sea Event (boats, fish, Terrorshark, Sea Beast, Leviathan)",
-		Default = Settings["Auto Use Dragon Storm For All Sea Events"] or false,
-	},
-	function(l)
-		SaveSettings("Auto Use Dragon Storm For All Sea Events", l)
-	end
-)
-SettingSeaEventSection.CreateToggle(
-	{
 		Title = "Auto Change Dragonstorm With Skull Guitar",
 		Desc = "When Kill Boat and Fish and TerrorShark use Dragonstorm\10Kill Seabeast use Seabeast",
 		Default = Settings["Auto Change Dragonstorm With Skull Guitar"] or false,
 	},
 	function(l)
 		SaveSettings("Auto Change Dragonstorm With Skull Guitar", l)
+	end
+)
+SettingSeaEventSection.CreateToggle(
+	{
+		Title = "Auto Use DragonStorm For ALL Sea Event",
+		Desc = "Uses only Dragonstorm for every Sea Event (boats, fish, Terrorshark, Sea Beast, Leviathan)",
+		Default = Settings["Auto Use Dragon Storm For All Sea Events"] or false,
+	},
+	function(l)
+		SaveSettings("Auto Use Dragon Storm For All Sea Events", l)
 	end
 )
 SettingSeaEventSection.CreateToggle(
@@ -13725,6 +13725,14 @@ spawn(function()
 	end
 end)
 LeviathanEventSection = SeaEventTab.CreateSection("Leviathan Event")
+LeviathanEventSection.CreateSlider(
+	{ Title = "Distance Auto Buy Boat", Min = 0, Max = 5000, Default = math.min(tonumber(Settings["Distance Auto Buy Boat"]) or 1250, 5000), Precise = true },
+	function(y)
+		local Distance = math.clamp(tonumber(y) or 1250, 0, 5000)
+		Settings["Distance Auto Buy Boat"] = Distance
+		SaveSettings("Distance Auto Buy Boat", Distance)
+	end
+)
 LeviathanEventSection.CreateButton({ Title = "Teleport your boat to current Position" }, function()
 	checkboat().VehicleSeat.CFrame = t.Character.HumanoidRootPart.CFrame
 end)
@@ -13734,7 +13742,7 @@ function AutoPaySpy()
 	if game.PlaceId ~= getgenv().CheckPlaceId then
 		return
 	end
-	while Settings["Auto Pay Spy"] do
+	while (Settings["Auto Buy Spy Leviathan"] or Settings["Auto Pay Spy"]) do
 		local ok, status = pcall(StatusCheckLeviathan)
 		if not ok or status == "You can find leviathan now" then
 			return
@@ -13749,22 +13757,15 @@ function AutoPaySpy()
 	end
 end
 LeviathanEventSection.CreateToggle(
-	{ Title = "Auto Pay Spy", Desc = "Paga o Spy com Fragmentos até o Leviathan estar à solta", Default = Settings["Auto Pay Spy"] or false },
+	{ Title = "Auto Buy Spy Leviathan", Desc = "Automatically buys the Leviathan Spy service with Fragments until Leviathan is available.", Default = Settings["Auto Buy Spy Leviathan"] or Settings["Auto Pay Spy"] or false },
 	function(y)
+		SaveSettings("Auto Buy Spy Leviathan", y)
 		SaveSettings("Auto Pay Spy", y)
 		if y then
 			task.spawn(function()
 				pcall(AutoPaySpy)
 			end)
 		end
-	end
-)
-LeviathanEventSection.CreateSlider(
-	{ Title = "Distance Auto Buy Boat", Min = 0, Max = 5000, Default = math.min(tonumber(Settings["Distance Auto Buy Boat"]) or 1250, 5000), Precise = true },
-	function(y)
-		local Distance = math.clamp(tonumber(y) or 1250, 0, 5000)
-		Settings["Distance Auto Buy Boat"] = Distance
-		SaveSettings("Distance Auto Buy Boat", Distance)
 	end
 )
 LeviathanEventSection.CreateToggle(
@@ -21185,7 +21186,7 @@ function FullyEventVolcano()
 		end
 	end
 end
-FarmingMultiVulcanoSection = VolcanoTab.CreateSection("Farming Multi Vulcano")
+FarmingMultiVulcanoSection = VolcanoTab.CreateSection("Farming Multi Volcano")
 
 local MultiPrehistoricPlayerDropdown = FarmingMultiVulcanoSection.CreateDropdown(
 	{
