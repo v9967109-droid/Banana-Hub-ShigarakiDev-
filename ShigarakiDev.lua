@@ -19804,10 +19804,11 @@ TableMelees = {
 	["Dragon Claw"] = 9,
 }
 function DetectMeleeFarmMastery()
-	local g, f = 1 / 0
-	for R, m in next, TableMelees, nil do
+	local g, f = math.huge, nil
+	for R, m in pairs(TableMelees) do
 		if not table.find(BlMeleeFarmMastery, R) then
-			if g > m then
+			local mastery = CheckMasteryMelee(R)
+			if mastery and mastery < 600 and m < g then
 				g, f = m, R
 			end
 		end
@@ -19842,6 +19843,10 @@ MasteryWeaponSection.CreateToggle(
 				while Settings["Auto Farm Mastery 600 Melees"] and (task.wait()) do
 					local f, f = pcall(function()
 						local R = DetectMeleeFarmMastery()
+						if not R then
+							task.wait(0.5)
+							return
+						end
 						if
 							not game.Players.LocalPlayer.Character:FindFirstChild(R)
 							and not game.Players.LocalPlayer.Backpack:FindFirstChild(R)
@@ -19872,16 +19877,17 @@ MasteryWeaponSection.CreateToggle(
 	end
 )
 function DetectSwordUnlock()
-	local g, f, R = next, B()
-	local m, l = 0
-	for S, S in g, f, R do
-		if S.Type == "Sword" and 600 > S.Mastery then
-			if m < S.Rarity then
-				m, l = S.Rarity, S.Name
+	local items = B()
+	local bestRarity, bestName = -math.huge, nil
+	for _, item in pairs(items or {}) do
+		if item.Type == "Sword" and tonumber(item.Mastery or 0) < 600 then
+			local rarity = tonumber(item.Rarity or 0) or 0
+			if rarity > bestRarity then
+				bestRarity, bestName = rarity, item.Name
 			end
 		end
 	end
-	return l
+	return bestName
 end
 MasteryWeaponSection.CreateToggle(
 	{
@@ -19916,25 +19922,30 @@ MasteryWeaponSection.CreateToggle(
 UpgradeWeaponSection = GetItemsMain.CreateSection("Upgrade Weapon")
 getgenv().StatusUpgradeWP = UpgradeWeaponSection.CreateLabel({ Title = "" })
 function DetectGunUnlock()
-	local g, f, R = next, B()
-	local m, l = 0
-	for Q, Q in g, f, R do
-		if Q.Type == "Gun" and 600 > Q.Mastery then
-			if m < Q.Rarity then
-				m, l = Q.Rarity, Q.Name
+	local items = B()
+	local bestRarity, bestName = -math.huge, nil
+	for _, item in pairs(items or {}) do
+		if item.Type == "Gun" and tonumber(item.Mastery or 0) < 600 then
+			local rarity = tonumber(item.Rarity or 0) or 0
+			if rarity > bestRarity then
+				bestRarity, bestName = rarity, item.Name
 			end
 		end
 	end
-	return l
+	return bestName
 end
 function DetectItemUpgrade(g)
+	local weapon = game:GetService("Players").LocalPlayer.Backpack:FindFirstChild(NameWeapon(g))
+		or game:GetService("Players").LocalPlayer.Character:FindFirstChild(NameWeapon(g))
+	if not weapon then
+		return nil
+	end
 	local f, R =
 		{},
 		{
 			[1] = "UpgradeItem",
 			[2] = "Check",
-			[3] = game:GetService("Players").LocalPlayer.Backpack:FindFirstChild(NameWeapon(g))
-				or (game:GetService("Players").LocalPlayer.Character:FindFirstChild(NameWeapon(g))),
+			[3] = weapon,
 		}
 	for g, g in next, game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer(unpack(R)).Required, nil do
 		f[g.Name] = g.Required
@@ -19977,14 +19988,21 @@ function DetectMaterialsUpgrade()
 	end
 end
 function AutoUpgradeWeapon(R)
-	if NameWeapon(R) ~= DetectNameWpUpgrade(R) then
+	local targetWeapon = DetectNameWpUpgrade(R)
+	if not targetWeapon then
 		if getgenv().StatusUpgradeWP then
-			StatusUpgradeWP.SetText("Change Weapon" .. DetectNameWpUpgrade(R))
+			StatusUpgradeWP.SetText("No " .. R .. " available to upgrade")
 		end
-		game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("LoadItem", DetectNameWpUpgrade(R))
 		return
 	end
-	if not f or f.NameWp ~= DetectNameWpUpgrade(R) then
+	if NameWeapon(R) ~= targetWeapon then
+		if getgenv().StatusUpgradeWP then
+			StatusUpgradeWP.SetText("Change Weapon " .. targetWeapon)
+		end
+		game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("LoadItem", targetWeapon)
+		return
+	end
+	if not f or f.NameWp ~= targetWeapon then
 		if not g then
 			for m, l in pairs(game.Workspace.NPCs:GetDescendants()) do
 				m = l:IsA("Model") and l.Name == "Blacksmith" and (l:FindFirstChild("Head"))
