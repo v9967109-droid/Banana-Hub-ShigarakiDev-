@@ -5466,20 +5466,18 @@ do
 			tokens[#tokens + 1] = "turtle mansion"
 			tokens[#tokens + 1] = "floating turtle"
 			tokens[#tokens + 1] = "mansion"
-			tokens[#tokens + 1] = "indra"
 		end
 		if to == "Hydra" then
 			tokens[#tokens + 1] = "hydra island"
 			tokens[#tokens + 1] = "hydra town"
 			tokens[#tokens + 1] = "hydra"
-			tokens[#tokens + 1] = "indra"
 		end
 		if to == "Tiki" then
 			tokens[#tokens + 1] = "tiki outpost"
 			tokens[#tokens + 1] = "tiki"
 			tokens[#tokens + 1] = "tyrant"
 		end
-		local best, bestScore
+		local best, bestScore, bestVisual
 		for _, c in ipairs(cands) do
 			local score = -c.dist * 0.5
 			-- Os portais do Terceiro Mar são colunas físicas transparentes.
@@ -5516,19 +5514,26 @@ do
 			if c.touch then
 				score += 700
 			end
-			-- Sem nome do destino: prefere o portal mais alinhado com a direção da ilha de destino.
+			-- Quando os portais do Castelo não têm o destino no nome, a direção
+			-- do portal é o principal critério. Isso evita que o portal de Tiki
+			-- seja escolhido para Hydra/Mansão só porque todos são portais roxos.
 			local dirIsland = BP.Islands[to] - BP.Islands[from]
 			local dirPortal = c.part.Position - BP.Islands[from]
 			local a = Vector3.new(dirIsland.X, 0, dirIsland.Z)
 			local b = Vector3.new(dirPortal.X, 0, dirPortal.Z)
 			if a.Magnitude > 1 and b.Magnitude > 1 then
-				score += a.Unit:Dot(b.Unit) * 400
+				local alignment = a.Unit:Dot(b.Unit)
+				score += alignment * 1800
+				-- Penaliza fortemente um portal que aponta para outra ilha.
+				if alignment < 0.15 then
+					score -= 3500
+				end
 			end
 			if not bestScore or score > bestScore then
-				best, bestScore = c, score
+				best, bestScore, bestVisual = c, score, visualPortal
 			end
 		end
-		if best and (best.named or best.touch) then
+		if best and (best.named or best.touch or bestVisual) then
 			BP.Cache[key] = { part = best.part, t = tick() }
 			return best.part.Position, "mapa"
 		end
@@ -9465,15 +9470,18 @@ task.spawn(function()
 				end
 			end
 			if Settings["Auto Elite Hunter"] then
-				-- Elite Hunter: request the mission, wait for the actual Elite to
-				-- spawn, then follow that exact target. Nothing else is changed.
+				-- Auto Elite Hunter: take the Elite Hunter mission, wait for the
+				-- correct elite to spawn, then move to and attack that elite.
+				-- This block is intentionally isolated so other systems are untouched.
 				local EliteNames = { "Deandre", "Urban", "Diablo" }
+
 				local function GetEliteQuestName()
 					local found
 					pcall(function()
 						local quest = t.PlayerGui.Main.Quest
-						if quest.Visible then
-							local title = quest.Container.QuestTitle.Title.Text
+						if quest and quest.Visible then
+							local titleObj = quest.Container.QuestTitle.Title
+							local title = titleObj and titleObj.Text or ""
 							for _, name in ipairs(EliteNames) do
 								if string.find(title, name, 1, true) then
 									found = name
@@ -9481,6 +9489,7 @@ task.spawn(function()
 								end
 							end
 						end
+					end
 					end)
 					return found
 				end
@@ -9488,12 +9497,14 @@ task.spawn(function()
 				local function FindElite(name)
 					local enemies = workspace:FindFirstChild("Enemies")
 					if not enemies then return nil end
+
 					if name then
 						local exact = enemies:FindFirstChild(name)
 						if exact and exact:IsA("Model") and IsMobAlive(exact) then
 							return exact
 						end
 					end
+
 					for _, mob in ipairs(enemies:GetChildren()) do
 						if mob:IsA("Model") and table.find(EliteNames, mob.Name) and IsMobAlive(mob) then
 							return mob
@@ -9502,27 +9513,33 @@ task.spawn(function()
 					return nil
 				end
 
+				-- Request the mission only when one is not already active.
 				local questName = GetEliteQuestName()
 				if not questName then
 					EliteRequest()
-					local questDeadline = tick() + 4
+					local questDeadline = tick() + 8
 					repeat
-						task.wait(0.15)
+						task.wait(0.2)
 						questName = GetEliteQuestName()
 					until questName or tick() >= questDeadline or not Settings["Auto Elite Hunter"]
 				end
 
-				local target = FindElite(questName)
+				if not Settings["Auto Elite Hunter"] then
+					return
+				end
+
+				-- After accepting the mission, keep checking until the actual
+				-- Elite spawns. This fixes the old "takes mission and stays still" state.
+				local target = FindElite(questName) or DetectEliteHunter()
 				if not target then
-					local spawnDeadline = tick() + 12
+					local spawnDeadline = tick() + 30
 					repeat
-						task.wait(0.2)
-						target = FindElite(questName)
-						if not target then target = DetectEliteHunter() end
+						task.wait(0.25)
+						target = FindElite(questName) or DetectEliteHunter()
 					until target or tick() >= spawnDeadline or not Settings["Auto Elite Hunter"]
 				end
 
-				if target then
+				if target and IsMobAlive(target) then
 					StackFarm = false
 					StackFarmOther = false
 					local targetName = target.Name
@@ -9533,9 +9550,12 @@ task.spawn(function()
 						end
 						if target and IsMobAlive(target) and target:FindFirstChild("HumanoidRootPart") then
 							sizepart(target)
-							local offset = Settings["Select Weapon"] == "Blox Fruit"
-								and CFrame.new(-7, getgenv().YPosFruit or 20, 0)
-								or CFrame.new(7, 20, 0)
+							local offset
+							if Settings["Select Weapon"] == "Blox Fruit" then
+								offset = CFrame.new(-7, getgenv().YPosFruit or 20, 0)
+							else
+								offset = CFrame.new(7, 20, 0)
+							end
 							toTarget(target.HumanoidRootPart.CFrame * offset)
 							ClickM1(target)
 							UsedualFlock()
