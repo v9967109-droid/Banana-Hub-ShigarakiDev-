@@ -3722,19 +3722,16 @@ function EliteQuestOK(name)
 end
 local K = { "Deandre", "Urban", "Diablo" }
 function DetectEliteHunter()
-	local names = { Deandre = true, Urban = true, Diablo = true }
-	local enemies = game:GetService("Workspace"):FindFirstChild("Enemies")
-	if enemies then
-		for _, mob in ipairs(enemies:GetDescendants()) do
-			if mob:IsA("Model") and names[mob.Name] and IsMobAlive(mob) then
-				return mob
-			end
+	local R, m, E = next, game:GetService("ReplicatedStorage"):GetChildren()
+	for l, l in R, m, E do
+		if l:IsA("Model") and (table.find(K, l.Name)) and (IsMobAlive(l)) then
+			return l
 		end
 	end
-	local rs = game:GetService("ReplicatedStorage")
-	for _, mob in ipairs(rs:GetDescendants()) do
-		if mob:IsA("Model") and names[mob.Name] and IsMobAlive(mob) then
-			return mob
+	E, m, R = next, game:GetService("Workspace").Enemies:GetChildren()
+	for l, l in E, m, R do
+		if l:IsA("Model") and (table.find(K, l.Name)) and (IsMobAlive(l)) then
+			return l
 		end
 	end
 end
@@ -8249,37 +8246,30 @@ BossDarkbeardSection.CreateToggle(
 	end
 )
 function GetPathFruit()
+	-- Detect dropped Blox Fruits by their real item names/Handle.
 	local workspaceService = game:GetService("Workspace")
 	local function IsFruitObject(H)
 		if not H or not (H:IsA("Tool") or H:IsA("Model")) then return false end
-		local n = string.lower(tostring(H.Name or ""))
-		local looksFruit = n:find("fruit", 1, true) or n:find("%-", 1, true)
-		if not looksFruit then
-			local handle = H:FindFirstChild("Handle", true)
-			looksFruit = handle ~= nil and (H:FindFirstChild("Fruit", true) ~= nil or H:FindFirstChild("Eat", true) ~= nil)
+		local handle = H:FindFirstChild("Handle", true)
+		if not handle or not handle:IsA("BasePart") then return false end
+		local name = tostring(H.Name)
+		if TableDevilFruit and TableDevilFruit[name] ~= nil then return true end
+		if string.find(string.lower(name), "fruit", 1, true) then return true end
+		if string.find(name, "%-", 1, true) and #name >= 7 then
+			local left = string.split(name, "-")[1]
+			if left and #left >= 3 then return true end
 		end
-		return looksFruit and H:FindFirstChild("Handle", true) ~= nil
+		return false
 	end
-	local best
+	for _, H in ipairs(workspaceService:GetChildren()) do
+		if IsFruitObject(H) then return H end
+	end
 	for _, H in ipairs(workspaceService:GetDescendants()) do
-		if IsFruitObject(H) then
-			best = H
-			break
-		end
+		if IsFruitObject(H) then return H end
 	end
-	return best
 end
 function GetPirateRaid(f)
-	-- Mantém a detecção original, mas permite encontrar o Pirate Raid mesmo
-	-- quando o inimigo estiver muito longe do ponto central do Castelo.
-	-- GetDescendants também cobre modelos que estejam dentro de pastas/containers.
-	local container = if f then game.ReplicatedStorage else game.workspace.Enemies
-	if not container then
-		return nil
-	end
-	local castlePosition = Vector3.new(-5543, 313, -2964)
-	local maxDistance = 5000
-	for _, V in ipairs(container:GetDescendants()) do
+	for V, V in ipairs((if f then game.ReplicatedStorage else game.workspace.Enemies):GetChildren()) do
 		if
 			V:IsA("Model")
 			and V.Name ~= "Oni2"
@@ -8288,11 +8278,9 @@ function GetPirateRaid(f)
 			and not string.find(V.Name, "Wraith")
 			and V.Name ~= "rip_indra True Form"
 			and (IsMobAlive(V))
+			and (V.HumanoidRootPart.Position - Vector3.new(-5543, 313, -2964)).magnitude < 1000
 		then
-			local root = V:FindFirstChild("HumanoidRootPart")
-			if root and (root.Position - castlePosition).Magnitude < maxDistance then
-				return V
-			end
+			return V
 		end
 	end
 end
@@ -9182,9 +9170,8 @@ task.spawn(function()
 				end
 			end
 			if Settings["Auto Elite Hunter"] then
-				-- Auto Elite Hunter: take the Elite Hunter mission, wait for the
-				-- correct elite to spawn, then move to and attack that elite.
-				-- This block is intentionally isolated so other systems are untouched.
+				-- Auto Elite Hunter: accept the mission, wait for the spawned Elite,
+				-- then move to and attack the actual Elite target.
 				local EliteNames = { "Deandre", "Urban", "Diablo" }
 
 				local function GetEliteQuestName()
@@ -9193,7 +9180,7 @@ task.spawn(function()
 						local quest = t.PlayerGui.Main.Quest
 						if quest and quest.Visible then
 							local titleObj = quest.Container.QuestTitle.Title
-							local title = titleObj and titleObj.Text or ""
+							local title = titleObj and tostring(titleObj.Text) or ""
 							for _, name in ipairs(EliteNames) do
 								if string.find(title, name, 1, true) then
 									found = name
@@ -9208,14 +9195,17 @@ task.spawn(function()
 				local function FindElite(name)
 					local enemies = workspace:FindFirstChild("Enemies")
 					if not enemies then return nil end
-
 					if name then
 						local exact = enemies:FindFirstChild(name)
 						if exact and exact:IsA("Model") and IsMobAlive(exact) then
 							return exact
 						end
 					end
-
+					for _, mob in ipairs(enemies:GetChildren()) do
+						if mob:IsA("Model") and table.find(EliteNames, mob.Name) and IsMobAlive(mob) then
+							return mob
+						end
+					end
 					for _, mob in ipairs(enemies:GetDescendants()) do
 						if mob:IsA("Model") and table.find(EliteNames, mob.Name) and IsMobAlive(mob) then
 							return mob
@@ -9224,13 +9214,12 @@ task.spawn(function()
 					return nil
 				end
 
-				-- Request the mission only when one is not already active.
 				local questName = GetEliteQuestName()
 				if not questName then
 					EliteRequest()
-					local questDeadline = tick() + 8
+					local questDeadline = tick() + 10
 					repeat
-						task.wait(0.2)
+						task.wait(0.25)
 						questName = GetEliteQuestName()
 					until questName or tick() >= questDeadline or not Settings["Auto Elite Hunter"]
 				end
@@ -9239,16 +9228,11 @@ task.spawn(function()
 					return
 				end
 
-				-- After accepting the mission, keep checking until the actual
-				-- Elite spawns. This fixes the old "takes mission and stays still" state.
 				local target = FindElite(questName) or DetectEliteHunter()
-				-- Detect nested/streamed elite models even when they are far from the player.
-				if not target then
-					local spawnDeadline = tick() + 30
-					repeat
-						task.wait(0.25)
-						target = FindElite(questName) or DetectEliteHunter()
-					until target or tick() >= spawnDeadline or not Settings["Auto Elite Hunter"]
+				local spawnDeadline = tick() + 60
+				while not target and tick() < spawnDeadline and Settings["Auto Elite Hunter"] do
+					task.wait(0.35)
+					target = FindElite(questName) or DetectEliteHunter()
 				end
 
 				if target and IsMobAlive(target) then
@@ -9256,21 +9240,21 @@ task.spawn(function()
 					StackFarmOther = false
 					local targetName = target.Name
 					repeat
-						task.wait()
+						task.wait(0.05)
 						if not IsMobAlive(target) then
 							target = FindElite(targetName) or DetectEliteHunter()
 						end
-						if target and IsMobAlive(target) and target:FindFirstChild("HumanoidRootPart") then
-							sizepart(target)
-							local offset
-							if Settings["Select Weapon"] == "Blox Fruit" then
-								offset = CFrame.new(-7, getgenv().YPosFruit or 20, 0)
-							else
-								offset = CFrame.new(7, 20, 0)
+						if target and IsMobAlive(target) then
+							local hrp = target:FindFirstChild("HumanoidRootPart")
+							if hrp then
+								sizepart(target)
+								local offset = Settings["Select Weapon"] == "Blox Fruit"
+									and CFrame.new(-7, getgenv().YPosFruit or 20, 0)
+									or CFrame.new(7, 20, 0)
+								toTarget(hrp.CFrame * offset)
+								ClickM1(target)
+								UsedualFlock()
 							end
-							toTarget(target.HumanoidRootPart.CFrame * offset)
-							ClickM1(target)
-							UsedualFlock()
 						end
 					until not Settings["Auto Elite Hunter"] or not target or not IsMobAlive(target)
 					return
@@ -9280,6 +9264,12 @@ task.spawn(function()
 					HopServer()
 				elseif DetectItemPlr("God's Chalice") then
 					toTarget(CFrame.new(-12463.8740234375, 374.9144592285156, -7523.77392578125))
+				else
+					A.CreateNoti({
+						Title = "Banana Cat Hub",
+						Desc = "Waiting Elite Hunter",
+						ShowTime = 5,
+					})
 				end
 			end
 
@@ -9342,13 +9332,13 @@ task.spawn(function()
 				if y and handle and root then
 					StackFarm = false
 					StackFarmOther = false
-					local distance = (handle.Position - root.Position).Magnitude
-					if distance > 1500 then
-						-- The normal tween can stop on very distant streamed objects; jump directly to the
-						-- detected fruit and let the normal pickup logic finish the last few studs.
-						root.CFrame = handle.CFrame * CFrame.new(0, 3, 0)
+					if (handle.Position - root.Position).Magnitude <= 7 then
+						getgenv().noclip = false
+						game:GetService("VirtualInputManager"):SendKeyEvent(true, "Space", false, game)
+						task.wait()
+						game:GetService("VirtualInputManager"):SendKeyEvent(false, "Space", false, game)
 					else
-						toTarget(handle.CFrame * CFrame.new(0, 3, 0), true)
+						toTarget(handle.CFrame, true)
 					end
 					return
 				elseif Settings["Teleport To Fruit [ Hop Server ]"] then
@@ -19759,11 +19749,10 @@ TableMelees = {
 	["Dragon Claw"] = 9,
 }
 function DetectMeleeFarmMastery()
-	local g, f = math.huge, nil
-	for R, m in pairs(TableMelees) do
+	local g, f = 1 / 0
+	for R, m in next, TableMelees, nil do
 		if not table.find(BlMeleeFarmMastery, R) then
-			local mastery = CheckMasteryMelee(R)
-			if mastery and mastery < 600 and m < g then
+			if g > m then
 				g, f = m, R
 			end
 		end
@@ -19782,30 +19771,6 @@ function CheckMasteryMelee(g)
 		end
 	end
 end
-local HauntedCastleMasteryTargets = {
-	"Reborn Skeleton", "Demonic Soul", "Living Zombie", "Possessed Mummy", "Posessed Mummy"
-}
-local function Farm600CastleWeapon(toolName)
-	local char = t.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart")
-	if not root or not toolName then return false end
-	local mob = DetectMob(HauntedCastleMasteryTargets)
-	if mob and mob:FindFirstChild("HumanoidRootPart") and IsMobAlive(mob) then
-		sizepart(mob)
-		pcall(BringMob, mob)
-		equiptool(toolName)
-		toTarget(mob.HumanoidRootPart.CFrame * CFrame.new(7, 20, 0))
-		ClickM1(mob)
-		return true
-	end
-	local spawnPart = DetectPartSpawnMob(DetectNameTablePart(HauntedCastleMasteryTargets))
-	if spawnPart then
-		toTarget(spawnPart.CFrame * CFrame.new(0, 60, 0))
-	else
-		toTarget(CFrame.new(-9509.34961, 142.130661, 5535.16309))
-	end
-	return false
-end
 MasteryWeaponSection.CreateToggle(
 	{ Title = "Auto Farm Mastery 600 Melees", Desc = nil, Default = Settings["Auto Farm Mastery 600 Melees"] or false },
 	function(g)
@@ -19813,78 +19778,82 @@ MasteryWeaponSection.CreateToggle(
 			Q = true
 			o:SetStage(true)
 			d:SetValue("Melee")
+		elseif not g and Q then
+			o:SetStage(false)
+			Q = false
+		end
+		if g then
 			spawn(function()
-				while Settings["Auto Farm Mastery 600 Melees"] and task.wait() do
-					pcall(function()
+				while Settings["Auto Farm Mastery 600 Melees"] and (task.wait()) do
+					local f, f = pcall(function()
 						local R = DetectMeleeFarmMastery()
-						if not R then return end
-						if not t.Backpack:FindFirstChild(R) and not t.Character:FindFirstChild(R) then
-							local m = string.gsub(R, " ", "")
+						if
+							not game.Players.LocalPlayer.Character:FindFirstChild(R)
+							and not game.Players.LocalPlayer.Backpack:FindFirstChild(R)
+						then
 							if R == "Dragon Claw" then
-								game.ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "DragonClaw", "1")
-								game.ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "DragonClaw", "2")
-							else
-								game.ReplicatedStorage.Remotes.CommF_:InvokeServer("Buy" .. m)
+								game.ReplicatedStorage.Remotes.CommF_:InvokeServer(
+									"BlackbeardReward",
+									"DragonClaw",
+									"1"
+								)
+								game.ReplicatedStorage.Remotes.CommF_:InvokeServer(
+									"BlackbeardReward",
+									"DragonClaw",
+									"2"
+								)
+								return
 							end
-						else
-							equiptool(R)
-							if CheckMasteryMelee(R) and CheckMasteryMelee(R) >= 600 then
-								table.insert(BlMeleeFarmMastery, R)
-							else
-								Farm600CastleWeapon(R)
-							end
+							local m = string.gsub(R, " ", "")
+							game.ReplicatedStorage.Remotes.CommF_:InvokeServer("Buy" .. m)
+						elseif CheckMasteryMelee(R) >= 600 then
+							table.insert(BlMeleeFarmMastery, R)
 						end
 					end)
 				end
 			end)
-		else
-			o:SetStage(false)
-			Q = false
 		end
 		SaveSettings("Auto Farm Mastery 600 Melees", g)
 	end
 )
 function DetectSwordUnlock()
-	local items = B()
-	local bestRarity, bestName = -math.huge, nil
-	for _, item in pairs(items or {}) do
-		if item.Type == "Sword" and tonumber(item.Mastery or 0) < 600 then
-			local rarity = tonumber(item.Rarity or 0) or 0
-			if rarity > bestRarity then bestRarity, bestName = rarity, item.Name end
+	local g, f, R = next, B()
+	local m, l = 0
+	for S, S in g, f, R do
+		if S.Type == "Sword" and 600 > S.Mastery then
+			if m < S.Rarity then
+				m, l = S.Rarity, S.Name
+			end
 		end
 	end
-	return bestName
+	return l
 end
 MasteryWeaponSection.CreateToggle(
-	{ Title = "Auto Farm Mastery 600 Sword In Inventory", Desc = nil, Default = Settings["Auto Farm Mastery 600 Sword In Inventory"] or false },
+	{
+		Title = "Auto Farm Mastery 600 Sword In Inventory",
+		Desc = nil,
+		Default = Settings["Auto Farm Mastery 600 Sword In Inventory"] or false,
+	},
 	function(g)
 		if g then
 			Q = true
 			o:SetStage(true)
 			d:SetValue("Sword")
+		elseif not g and Q then
+			o:SetStage(false)
+			Q = false
+		end
+		if g then
 			spawn(function()
-				while Settings["Auto Farm Mastery 600 Sword In Inventory"] and task.wait() do
+				while Settings["Auto Farm Mastery 600 Sword In Inventory"] and (task.wait()) do
 					pcall(function()
-						local sword = DetectSwordUnlock()
-						if not sword then return end
-						if not t.Backpack:FindFirstChild(sword) and not t.Character:FindFirstChild(sword) then
-							game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("LoadItem", sword)
-						else
-							equiptool(sword)
-							local tool = t.Character:FindFirstChild(sword)
-							local mastery = tool and tool:FindFirstChild("Level")
-							if mastery and mastery.Value >= 600 then
-								-- Next loop selects another sword below 600 and equips it.
-								return
-							end
-							Farm600CastleWeapon(sword)
+						local f = DetectSwordUnlock()
+						if f and not t.Backpack:FindFirstChild(f) and not t.Character:FindFirstChild(f) then
+							game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("LoadItem", f)
 						end
 					end)
 				end
 			end)
-		else
-			o:SetStage(false)
-			Q = false
 		end
 		SaveSettings("Auto Farm Mastery 600 Sword In Inventory", g)
 	end
@@ -19892,30 +19861,25 @@ MasteryWeaponSection.CreateToggle(
 UpgradeWeaponSection = GetItemsMain.CreateSection("Upgrade Weapon")
 getgenv().StatusUpgradeWP = UpgradeWeaponSection.CreateLabel({ Title = "" })
 function DetectGunUnlock()
-	local items = B()
-	local bestRarity, bestName = -math.huge, nil
-	for _, item in pairs(items or {}) do
-		if item.Type == "Gun" and tonumber(item.Mastery or 0) < 600 then
-			local rarity = tonumber(item.Rarity or 0) or 0
-			if rarity > bestRarity then
-				bestRarity, bestName = rarity, item.Name
+	local g, f, R = next, B()
+	local m, l = 0
+	for Q, Q in g, f, R do
+		if Q.Type == "Gun" and 600 > Q.Mastery then
+			if m < Q.Rarity then
+				m, l = Q.Rarity, Q.Name
 			end
 		end
 	end
-	return bestName
+	return l
 end
 function DetectItemUpgrade(g)
-	local weapon = game:GetService("Players").LocalPlayer.Backpack:FindFirstChild(NameWeapon(g))
-		or game:GetService("Players").LocalPlayer.Character:FindFirstChild(NameWeapon(g))
-	if not weapon then
-		return nil
-	end
 	local f, R =
 		{},
 		{
 			[1] = "UpgradeItem",
 			[2] = "Check",
-			[3] = weapon,
+			[3] = game:GetService("Players").LocalPlayer.Backpack:FindFirstChild(NameWeapon(g))
+				or (game:GetService("Players").LocalPlayer.Character:FindFirstChild(NameWeapon(g))),
 		}
 	for g, g in next, game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer(unpack(R)).Required, nil do
 		f[g.Name] = g.Required
@@ -19958,21 +19922,14 @@ function DetectMaterialsUpgrade()
 	end
 end
 function AutoUpgradeWeapon(R)
-	local targetWeapon = DetectNameWpUpgrade(R)
-	if not targetWeapon then
+	if NameWeapon(R) ~= DetectNameWpUpgrade(R) then
 		if getgenv().StatusUpgradeWP then
-			StatusUpgradeWP.SetText("No " .. R .. " available to upgrade")
+			StatusUpgradeWP.SetText("Change Weapon" .. DetectNameWpUpgrade(R))
 		end
+		game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("LoadItem", DetectNameWpUpgrade(R))
 		return
 	end
-	if NameWeapon(R) ~= targetWeapon then
-		if getgenv().StatusUpgradeWP then
-			StatusUpgradeWP.SetText("Change Weapon " .. targetWeapon)
-		end
-		game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("LoadItem", targetWeapon)
-		return
-	end
-	if not f or f.NameWp ~= targetWeapon then
+	if not f or f.NameWp ~= DetectNameWpUpgrade(R) then
 		if not g then
 			for m, l in pairs(game.Workspace.NPCs:GetDescendants()) do
 				m = l:IsA("Model") and l.Name == "Blacksmith" and (l:FindFirstChild("Head"))
