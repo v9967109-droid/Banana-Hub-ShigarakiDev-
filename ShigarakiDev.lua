@@ -20389,6 +20389,21 @@ function AutoMultiFindPrehistoric()
 	local boat = checkboat()
 	if not boat then
 		getgenv().MultiPrehistoricTwoMeterDone = false
+		local character = t.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not root then
+			return
+		end
+		-- Auto Multi Find Prehistoric: go to the Boat Dealer before buying Beast Hunter.
+		-- This is isolated to this function and does not change the other boat systems.
+		local boatShop = CFrame.new(-16204.0810546875, 9.0863618850708, 479.2259521484375)
+		if game.PlaceId ~= getgenv().CheckPlaceId then
+			boatShop = CFrame.new(-13.488054275512695, 10.311711311340332, 2927.692)
+		end
+		if (boatShop.Position - root.Position).Magnitude > 8 then
+			toTarget(boatShop)
+			return
+		end
 		game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("BuyBoat", "Beast Hunter")
 		wait(3)
 		return
